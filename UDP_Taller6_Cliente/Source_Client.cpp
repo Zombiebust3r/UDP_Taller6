@@ -1,9 +1,11 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Network.hpp>
 #include <iostream>
-
+#include <random>
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
+
+#define PERCENT_PACKETLOSS 0.3
 
 enum Commands { HEY, CON, NEW, ACK, MOV, PIN };
 
@@ -29,7 +31,12 @@ std::vector<Player> players = std::vector<Player>();
 	//UNA FUNCIÓN QUE SE LLAME EN EL RECEIVE QUE ELIMINE EL MENSAJE CONFIRMADO DE LA LISTA DE PENDIENTES. SE EJECUTA ANTES DEL ENVIO PARA NO ENVIAR ALGO YA CONFIRMADO.
 	//UNA FUNCIÓN QUE PASE POR UN VECTOR DE MESNAJES (ID, MSG, TIEMPO [se añade dt cada frame]) <int, packet, int(milisegundos)> Y LOS ENVIE CADA 500ms.
 std::vector<PendingMessage> messagePending = std::vector<PendingMessage>();
-
+float GetRandomFloat() {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<float> dis(0.f, 1.f);
+	return dis(gen);
+}
 void SendMessages(int deltaTime) {
 	//for()
 		//if(msg[i].time > 500ms) { reenviar + resetear a 0 el time }
@@ -37,6 +44,7 @@ void SendMessages(int deltaTime) {
 	for (auto i : messagePending) {
 		i.time += deltaTime;
 		if (i.time > 500) {
+			std::cout << "reenvia mensaje" << std::endl;
 			//RESEND MESSAGE
 			sock.send(i.packet, IP_SERVER, PORT_SERVER);
 			i.time = 0;
@@ -131,7 +139,9 @@ void DibujaSFML()
 			int idMessage;
 			pck >> command;
 			Player sPlayer;
-			switch (command) {
+			float randomNumber = GetRandomFloat();
+			if (randomNumber > PERCENT_PACKETLOSS){
+				switch (command) {
 				case CON:
 				{
 					int numPlayers;
@@ -201,7 +211,10 @@ void DibujaSFML()
 					sock.send(pckAck, IP_SERVER, PORT_SERVER);
 					break;
 				}
-				
+				} //esto esta bien tabulado
+			}
+			else {
+				std::cout << "Se ha ignorado el mensaje con comando " << command << " (Roll: " << randomNumber << ")" << std::endl;
 			}
 		}
 

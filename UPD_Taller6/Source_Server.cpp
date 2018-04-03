@@ -1,6 +1,7 @@
 #include <SFML\Network.hpp>
 #include <SFML/Graphics.hpp>
 #include <iostream>
+#include <random>
 
 #define RIGHT_POS 600
 #define LEFT_POS 200
@@ -8,6 +9,8 @@
 #define MAXPINTTRIES 5
 #define PINGMAXTIME_MS 10000
 #define COMMANDMAXTIME_MS 500
+
+#define PERCENT_PACKETLOSS 0.5
 
 enum Commands { HEY, CON, NEW, ACK, MOV, PIN };
 
@@ -39,13 +42,19 @@ std::vector<PendingMessage> messagePending = std::vector<PendingMessage>();
 
 std::vector<Player> players = std::vector<Player>();
 
+float GetRandomFloat() {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<float> dis(0.f, 1.f);
+	return dis(gen);
+}
 sf::Vector2i RandoPosGenerator() {
 	sf::Vector2i temp;
 	temp.x = (rand() % 401) + 200; //entre 200 y 600
 	temp.y = (rand() % 401) + 200; //random lel
 	return temp;
 }
-
+void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsigned short _port);
 Player MakePlayer(sf::IpAddress ipRem, short portRem) {
 
 	Player tempPlayer;
@@ -232,60 +241,66 @@ int main()
 				int idMessage;
 
 				pck >> command;
-				switch (command) {
-				case HEY:
-					std::cout << "RECEIVED HEY FROM PORT " << portRem << std::endl;
-					//comprobar si es el primero
-					int idMessage;
-					pck >> idMessage;
-					if (players.size() > 0) {
-						//comprobar si ya existe via ip
-						int it = 0;
-						bool repeated = false;
-						while (!repeated && (it < players.size())) {
-							if (ipRem == players[it].ip && portRem == players[it].port) {
-								repeated = true;
-								tempPlayer = players[it]; //guardamos info jugador para reenviar paquete
-								std::cout << "repeated player" << std::endl;
+				float randomNumber = GetRandomFloat();
+				if (randomNumber > PERCENT_PACKETLOSS) {
+					switch (command) {
+					case HEY:
+						std::cout << "RECEIVED HEY FROM PORT " << portRem << std::endl;
+						//comprobar si es el primero
+						int idMessage;
+						pck >> idMessage;
+						if (players.size() > 0) {
+							//comprobar si ya existe via ip
+							int it = 0;
+							bool repeated = false;
+							while (!repeated && (it < players.size())) {
+								if (ipRem == players[it].ip && portRem == players[it].port) {
+									repeated = true;
+									tempPlayer = players[it]; //guardamos info jugador para reenviar paquete
+									std::cout << "repeated player" << std::endl;
+								}
+								it++;
 							}
-							it++;
+							if (!repeated) {//crear usuario
+								tempPlayer = MakePlayer(ipRem, portRem);
+
+								for (int i = 0; i < players.size(); i++) {//aquí iria añadir NEW al resto
+									sf::Packet pckNew;
+									pckNew << Commands::NEW;
+									pckNew << tempPlayer.playerID;
+									pckNew << tempPlayer.pjColor.r;
+									pckNew << tempPlayer.pjColor.g;
+									pckNew << tempPlayer.pjColor.b;
+									pckNew << tempPlayer.pos.x;
+									pckNew << tempPlayer.pos.y;
+									std::cout << "envio new al puerto " << players[i].port << std::endl;
+									AddMessage(Commands::NEW, pckNew, players[i].ip, players[i].port);
+								}
+								//añadir usuario a lista
+								players.push_back(tempPlayer);
+							}
+
 						}
-						if (!repeated) {//crear usuario
+						else {
+							//crear usuario
 							tempPlayer = MakePlayer(ipRem, portRem);
-							
-							for (int i = 0; i < players.size(); i++) {//aquí iria añadir NEW al resto
-								sf::Packet pckNew;
-								pckNew << Commands::NEW;
-								pckNew << tempPlayer.playerID;
-								pckNew << tempPlayer.pjColor.r;
-								pckNew << tempPlayer.pjColor.g;
-								pckNew << tempPlayer.pjColor.b;
-								pckNew << tempPlayer.pos.x;
-								pckNew << tempPlayer.pos.y;
-								std::cout << "envio new al puerto " << players[i].port << std::endl;
-								AddMessage(Commands::NEW, pckNew, players[i].ip, players[i].port);
-							}
 							//añadir usuario a lista
 							players.push_back(tempPlayer);
 						}
-						
+						//añadido usuario
+						std::cout << "Current player size: " << players.size() << std::endl;
+						//enviar paquete
+						SendCon(tempPlayer, players, idMessage);
+						break;
+
+					case ACK:
+						pck >> idMessage;
+						MessageConfirmed(idMessage);
+						break;
 					}
-					else {
-						//crear usuario
-						tempPlayer = MakePlayer(ipRem, portRem);
-						//añadir usuario a lista
-						players.push_back(tempPlayer);
-					}
-					//añadido usuario
-					std::cout << "Current player size: " << players.size() << std::endl;
-					//enviar paquete
-					SendCon(tempPlayer, players, idMessage);
-					break;
-					
-				case ACK:
-					pck >> idMessage;
-					MessageConfirmed(idMessage);
-					break;
+				}
+				else {
+					std::cout << "Se ha ignorado el mensaje con comando " << command << " (Roll: " << randomNumber << ")" << std::endl;
 				}
 
 				/*

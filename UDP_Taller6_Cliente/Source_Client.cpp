@@ -5,7 +5,7 @@
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
 
-enum Commands { HEY, CON, INF, NEW, MOV };
+enum Commands { HEY, CON, NEW, MOV };
 
 int pos;
 sf::UdpSocket sock;
@@ -130,8 +130,15 @@ void DibujaSFML()
 		{
 			//Gestionar si se conecta un nuevo jugador con prefijo NEW en el packet.
 			//Gestionar si un jugador se mueve: Recibimos su ID y su nueva pos como dos ints (x, y) por separado con un prefijo MOV en el packet.
-			pck >> pos;
-			std::cout << "Recibo la confirmacion: " << pos << std::endl;
+			int command;
+			pck >> command;
+			switch (command) {
+			case CON:
+				int numPlayers;
+				pck >> numPlayers;
+				std::cout << "recibo un CON con " << numPlayers << " jugs" << std::endl;
+				break;
+			}
 		}
 
 		//REENVIAR PENDIENTES CADA 500ms.
@@ -158,10 +165,13 @@ void DibujaSFML()
 
 }
 
-int main()
-{
+int main(){
 	pos = 200;
 	sock.setBlocking(false);
+	//sistema HEY
+	sf::Packet pckHey;
+	pckHey << Commands::HEY;
+	AddMessage(pckHey);
 	DibujaSFML();
 	return 0;
 }

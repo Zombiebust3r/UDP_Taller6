@@ -5,8 +5,9 @@
 #define RIGHT_POS 600
 #define LEFT_POS 200
 
-enum Commands { HEY, CON, INF, NEW, MOV };
+enum Commands { HEY, CON, NEW, MOV };
 
+int playerID = 1; //se irá sumando 1 cada jugador nuevo
 int actualID = 0;
 sf::UdpSocket sock;
 
@@ -28,6 +29,51 @@ struct PendingMessage {
 };
 
 std::vector<PendingMessage> messagePending = std::vector<PendingMessage>();
+
+sf::Vector2i RandoPosGenerator() {
+	sf::Vector2i temp;
+	temp.x = (rand() % 401) + 200; //entre 200 y 600
+	temp.y = (rand() % 401) + 200; //random lel
+	return temp;
+}
+Player MakePlayer(sf::IpAddress ipRem, short portRem) {
+
+	Player tempPlayer;
+	tempPlayer.ip = ipRem;
+	tempPlayer.port = portRem;
+	tempPlayer.playerID = playerID++;
+	tempPlayer.pjColor = sf::Color::Red;
+	tempPlayer.pos = RandoPosGenerator();
+
+	return tempPlayer;
+}
+
+void SendCon(Player player, std::vector<Player> players, int idMessage) {
+	//enviar paquete
+	sf::Packet pckCon;
+	pckCon << CON;
+	pckCon << int(players.size()); //así envía el numero de jugadores a añadir
+	pckCon << player.playerID;//id
+	pckCon << player.pjColor.r;//color
+	pckCon << player.pjColor.g;
+	pckCon << player.pjColor.b;
+	pckCon << player.pos.x; //pos
+	pckCon << player.pos.y;
+	if (players.size() > 0) {
+		for (int i = 0; i < players.size() - 1; i++) {
+			std::cout << "sending player: " << i << std::endl;
+			//id, color, pos
+			pckCon << players[i].playerID;
+			pckCon << players[i].pjColor.r;//color
+			pckCon << players[i].pjColor.g;
+			pckCon << players[i].pjColor.b;
+			pckCon << players[i].pos.x; //pos
+			pckCon << players[i].pos.y;
+		}
+	}
+	pckCon << idMessage;
+	sock.send(pckCon, player.ip, player.port);
+}
 
 void AddMessage(sf::Packet _pack, sf::IpAddress _ip, unsigned short _port) {	// SOLO PARA EL NEW
 	PendingMessage tempPending;
@@ -75,8 +121,7 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 int main()
 {
 	std::vector<Player> players = std::vector<Player>();
-	
-	
+
 	sf::Socket::Status status = sock.bind(50000);
 	if (status != sf::Socket::Done)
 	{
@@ -95,6 +140,50 @@ int main()
 			status = sock.receive(pck, ipRem, portRem);
 			if (status == sf::Socket::Done)
 			{
+				int command;
+				pck >> command;
+				switch (command) {
+				case HEY:
+
+					Player tempPlayer;
+					//comprobar si es el primero
+					int idMessage;
+					pck >> idMessage;
+					if (players.size() > 0) {
+						//comprobar si ya existe via ip
+						int it = 0;
+						bool repeated = false;
+						while (!repeated && (it < players.size())) {
+							if (ipRem == players[it].ip && portRem == players[it].port) {
+								repeated = true;
+								tempPlayer = players[it]; //guardamos info jugador para reenviar paquete
+								std::cout << "rep";
+							}
+							it++;
+						}
+						if (!repeated) {//crear usuario
+							tempPlayer = MakePlayer(ipRem, portRem);
+							//añadir usuario a lista
+							players.push_back(tempPlayer);
+
+							//aquí iria añadir NEW al resto
+						}
+						
+					}
+					else {
+						//crear usuario
+						tempPlayer = MakePlayer(ipRem, portRem);
+						//añadir usuario a lista
+						players.push_back(tempPlayer);
+					}
+					//añadido usuario
+					std::cout << players.size() << std::endl;
+					//enviar paquete
+					SendCon(tempPlayer, players, idMessage);
+					break;
+				}
+
+				/*
 				int pos;
 				pck >> pos;
 				if (pos == -1)
@@ -111,6 +200,7 @@ int main()
 					sock.send(pckSend, ipRem, portRem);
 					
 				}
+				*/
 			}
 			clock.restart();
 		}

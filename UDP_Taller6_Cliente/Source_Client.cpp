@@ -205,10 +205,13 @@ void DibujaSFML()
 		window.draw(rectBlanco);
 
 		//For para cada jugador -> rectAvatar(players[i].pos) | rectAvatar(sf::Vector2f(players[i].pos.x, players[i].pos.y))
-		sf::RectangleShape rectAvatar(sf::Vector2f(60, 60));
-		rectAvatar.setFillColor(sf::Color::Green);
-		rectAvatar.setPosition(sf::Vector2f(pos, 280));
-		window.draw(rectAvatar);
+		for (auto p : players) {
+			sf::RectangleShape rectAvatar(sf::Vector2f(60, 60));
+			rectAvatar.setFillColor(p.pjColor);
+			rectAvatar.setPosition(sf::Vector2f(p.pos.x, p.pos.y));
+			window.draw(rectAvatar);
+		}
+		
 
 		window.display();
 	}

@@ -10,6 +10,7 @@ enum Commands { HEY, CON, NEW, ACK, MOV };
 int playerID = 1; //se irá sumando 1 cada jugador nuevo
 int actualID = 0;
 sf::UdpSocket sock;
+bool firstReset = true;
 
 struct Player
 {
@@ -222,7 +223,7 @@ int main()
 			}
 			clock.restart();
 		}
-
+		if (firstReset) { clockDeltaTime.restart(); firstReset = false; }
 		SendMessages(clockDeltaTime.getElapsedTime().asMilliseconds());
 		clockDeltaTime.restart();
 

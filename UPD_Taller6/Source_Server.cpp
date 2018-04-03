@@ -55,6 +55,9 @@ Player MakePlayer(sf::IpAddress ipRem, short portRem) {
 	tempPlayer.pjColor = sf::Color::Red;
 	tempPlayer.pos = RandoPosGenerator();
 	tempPlayer.pingTries = 0;
+	sf::Packet pinPacket;
+	pinPacket << Commands::PIN;
+	AddMessage(Commands::PIN, pinPacket, tempPlayer.ip, tempPlayer.port);	//ADD PING MESSAGE EACH TIME WE CREATE A NEW PLAYER
 	
 	return tempPlayer;
 }
@@ -68,6 +71,28 @@ int PlayerIndexByIP(sf::IpAddress _ipToSearch) {
 		index++;
 	}
 	return -1;
+}
+
+std::vector<Player>::iterator PlayerItIndexByIP(sf::IpAddress _ipToSearch) {
+	std::vector<Player>::iterator it = players.begin();
+	for (auto i : players) {
+		if (i.ip == _ipToSearch) {
+			return it;
+		}
+		it++;
+	}
+	return players.end();
+}
+
+std::vector<PendingMessage>::iterator MessageItIndexByIP(int _id) {
+	std::vector<PendingMessage>::iterator it = messagePending.begin();
+	for (auto i : messagePending) {
+		if (i.id == _id) {
+			return it;
+		}
+		it++;
+	}
+	return messagePending.end();
 }
 
 void SendCon(Player player, std::vector<Player> players, int idMessage) {
@@ -129,7 +154,9 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 }
 
 void SendMessages(int deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN QUE MANDAR SIEMPRE Y CUANDO EL JUGADOR AL QUE SE ENVÍA NO ESTÁ DESCONECTADO
+	std::vector<PendingMessage>::iterator messageToDelete;
 	for (auto i : messagePending) {
+		bool send = true;
 		i.time += deltaTime;
 		if (i.time > i.maxTime) {
 			//RESEND MESSAGE
@@ -139,10 +166,16 @@ void SendMessages(int deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN QUE
 					players[playerIndex].pingTries += 1;
 					if (players[playerIndex].pingTries >= MAXPINTTRIES) {
 						//DISCONNECT THAT PLAYER -----------------------------------------------------------------------------------------------------------------------------------
+						std::vector<Player>::iterator playerToDelete = PlayerItIndexByIP(i.targetAdress);
+						if(playerToDelete != players.end()) players.erase(playerToDelete);
+						//DELETE PING MESSAGE FROM PENDING MESSAGES ----------------------------------------------------------------------------------------------------------------
+						messageToDelete = MessageItIndexByIP(i.id);
+						send = false;
 					}
 				}
 			}
-			sock.send(i.packet, i.targetAdress, i.port);
+			if (send) { sock.send(i.packet, i.targetAdress, i.port); }
+			else { if (messageToDelete != messagePending.end()) messagePending.erase(messageToDelete); }
 			i.time = 0;
 		}
 	}

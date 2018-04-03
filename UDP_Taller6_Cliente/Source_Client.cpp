@@ -5,7 +5,7 @@
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
 
-enum Commands { HEY, CON, NEW, ACK, MOV };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN };
 
 int pos;
 sf::UdpSocket sock;
@@ -132,20 +132,37 @@ void DibujaSFML()
 			pck >> command;
 			Player sPlayer;
 			switch (command) {
-			case CON:
-				int numPlayers;
-				pck >> numPlayers;
-				std::cout << "recibo un CON con " << numPlayers << " jugs" << std::endl;
-				pck >> sPlayer.playerID;
-				pck >> sPlayer.pjColor.r;
-				pck >> sPlayer.pjColor.g;
-				pck >> sPlayer.pjColor.b;
-				pck >> sPlayer.pos.x;
-				pck >> sPlayer.pos.y;
-				players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector
-				std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
-				for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
-					std::cout << "other jugador: " << i << std::endl;
+				case CON:
+				{
+					int numPlayers;
+					pck >> numPlayers;
+					std::cout << "recibo un CON con " << numPlayers << " jugs" << std::endl;
+					pck >> sPlayer.playerID;
+					pck >> sPlayer.pjColor.r;
+					pck >> sPlayer.pjColor.g;
+					pck >> sPlayer.pjColor.b;
+					pck >> sPlayer.pos.x;
+					pck >> sPlayer.pos.y;
+					players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector
+					std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
+					for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
+						std::cout << "other jugador: " << i << std::endl;
+						Player tempPlayer;
+						pck >> tempPlayer.playerID;
+						pck >> tempPlayer.pjColor.r;
+						pck >> tempPlayer.pjColor.g;
+						pck >> tempPlayer.pjColor.b;
+						pck >> tempPlayer.pos.x;
+						pck >> tempPlayer.pos.y;
+						players.push_back(tempPlayer);
+					}
+					pck >> idMessage;
+					MessageConfirmed(idMessage);
+					break;
+				}
+				case NEW:
+				{
+					//pillar jugador y devolver ack con idmessage
 					Player tempPlayer;
 					pck >> tempPlayer.playerID;
 					pck >> tempPlayer.pjColor.r;
@@ -153,41 +170,38 @@ void DibujaSFML()
 					pck >> tempPlayer.pjColor.b;
 					pck >> tempPlayer.pos.x;
 					pck >> tempPlayer.pos.y;
-					players.push_back(tempPlayer);
-				}
-				pck >> idMessage;
-				MessageConfirmed(idMessage);
-				break;
-			case NEW:
-				//pillar jugador y devolver ack con idmessage
-				Player tempPlayer;
-				pck >> tempPlayer.playerID;			
-				pck >> tempPlayer.pjColor.r;
-				pck >> tempPlayer.pjColor.g;
-				pck >> tempPlayer.pjColor.b;
-				pck >> tempPlayer.pos.x;
-				pck >> tempPlayer.pos.y;
 
-				std::cout << "recibo un nuevo jugador id: " << tempPlayer.playerID << std::endl;
-				//revisar si ya tengo a este jugador i guess
-				int it = 0;
-				bool found = false;
-				while (!found && (it < players.size())) {
-					if (tempPlayer.playerID == players[it].playerID) found = true;
-					it++;
-				}
+					std::cout << "recibo un nuevo jugador id: " << tempPlayer.playerID << std::endl;
+					//revisar si ya tengo a este jugador i guess
+					int it = 0;
+					bool found = false;
+					while (!found && (it < players.size())) {
+						if (tempPlayer.playerID == players[it].playerID) found = true;
+						it++;
+					}
 
-				if (!found) players.push_back(tempPlayer);
-				else std::cout << "Se ha enviado un jugador repetido" << std::endl;
-				//enviar ack
-				pck >> idMessage;
-				sf::Packet pckAck;
-				pckAck << Commands::ACK;
-				pckAck << idMessage;
-				sock.send(pckAck, IP_SERVER, PORT_SERVER);
-				std::cout << "enviado ACK" << std::endl;
-				std::cout << "Confirmacion numero de jugadores en lista: " << players.size() << std::endl;
-				break;
+					if (!found) players.push_back(tempPlayer);
+					else std::cout << "Se ha enviado un jugador repetido" << std::endl;
+					//enviar ack
+					pck >> idMessage;
+					sf::Packet pckAck;
+					pckAck << Commands::ACK;
+					pckAck << idMessage;
+					sock.send(pckAck, IP_SERVER, PORT_SERVER);
+					std::cout << "enviado ACK" << std::endl;
+					std::cout << "Confirmacion numero de jugadores en lista: " << players.size() << std::endl;
+					break;
+				}
+				case PIN:
+				{
+					pck >> idMessage;
+					sf::Packet pckAck;
+					pckAck << Commands::ACK;
+					pckAck << idMessage;
+					sock.send(pckAck, IP_SERVER, PORT_SERVER);
+					break;
+				}
+				
 			}
 		}
 

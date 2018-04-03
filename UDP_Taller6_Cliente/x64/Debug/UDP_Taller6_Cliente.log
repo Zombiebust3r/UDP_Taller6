@@ -1,4 +1,4 @@
 ﻿  Source_Client.cpp
-c:\users\dpeco\documents\github\udp_taller6\udp_taller6_cliente\source_client.cpp(238): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-  UDP_Taller6_Cliente.vcxproj -> C:\Users\dpeco\Documents\GitHub\UDP_Taller6\x64\Debug\UDP_Taller6_Cliente.exe
-  UDP_Taller6_Cliente.vcxproj -> C:\Users\dpeco\Documents\GitHub\UDP_Taller6\x64\Debug\UDP_Taller6_Cliente.pdb (Partial PDB)
+d:\documentos\github\upd\udp_taller6\udp_taller6_cliente\source_client.cpp(255): warning C4244: 'argumento': conversión de 'int' a 'float'; posible pérdida de datos
+  UDP_Taller6_Cliente.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UDP_Taller6_Cliente.exe
+  UDP_Taller6_Cliente.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UDP_Taller6_Cliente.pdb (Partial PDB)

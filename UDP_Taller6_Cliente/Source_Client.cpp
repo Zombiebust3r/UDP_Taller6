@@ -2,6 +2,7 @@
 #include <SFML/Network.hpp>
 #include <iostream>
 #include <random>
+
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
 
@@ -23,7 +24,7 @@ struct Player
 struct PendingMessage {
 	sf::Packet packet;
 	int id;
-	int time;
+	float time;
 };
 std::vector<Player> players = std::vector<Player>();
 
@@ -31,6 +32,7 @@ std::vector<Player> players = std::vector<Player>();
 	//UNA FUNCIÓN QUE SE LLAME EN EL RECEIVE QUE ELIMINE EL MENSAJE CONFIRMADO DE LA LISTA DE PENDIENTES. SE EJECUTA ANTES DEL ENVIO PARA NO ENVIAR ALGO YA CONFIRMADO.
 	//UNA FUNCIÓN QUE PASE POR UN VECTOR DE MESNAJES (ID, MSG, TIEMPO [se añade dt cada frame]) <int, packet, int(milisegundos)> Y LOS ENVIE CADA 500ms.
 std::vector<PendingMessage> messagePending = std::vector<PendingMessage>();
+
 float GetRandomFloat() {
 	std::random_device rd;
 	std::mt19937 gen(rd());
@@ -38,18 +40,30 @@ float GetRandomFloat() {
 	return dis(gen);
 }
 void SendMessages(int deltaTime) {
-	//for()
-		//if(msg[i].time > 500ms) { reenviar + resetear a 0 el time }
-		//else { time + chronoDeltaTime.getTime().asMilliseconds(); }
-	for (auto i : messagePending) {
-		i.time += deltaTime;
-		if (i.time > 500) {
-			std::cout << "reenvia mensaje" << std::endl;
+	//std::cout << "DELTATIME: " << deltaTime << std::endl;
+	//std::cout << messagePending.size() << std::endl;
+
+	for (int i = 0; i < messagePending.size(); i++) {
+		messagePending[i].time += deltaTime;
+		std::cout << messagePending[i].time << std::endl;
+		if (messagePending[i].time > 500) {
+			std::cout << "-------------------------------------------------------reenvia mensaje" << std::endl;
 			//RESEND MESSAGE
-			sock.send(i.packet, IP_SERVER, PORT_SERVER);
-			i.time = 0;
+			sock.send(messagePending[i].packet, IP_SERVER, PORT_SERVER);
+			messagePending[i].time = 0.0f;
 		}
 	}
+
+	/*for (auto i : messagePending) {
+		i.time += deltaTime;
+		//std::cout << i.time << std::endl;
+		if (i.time > 0.500f) {
+			std::cout << "-------------------------------------------------------reenvia mensaje" << std::endl;
+			//RESEND MESSAGE
+			sock.send(i.packet, IP_SERVER, PORT_SERVER);
+			i.time = 0.0f;
+		}
+	}*/
 	
 }
 
@@ -58,7 +72,7 @@ void AddMessage(sf::Packet _pack) {	//SOLO PARA EL HEY
 	tempPending.id = actualID;
 	_pack << actualID;
 	tempPending.packet = _pack;
-	tempPending.time = 0;
+	tempPending.time = 0.0f;
 
 	sock.send(_pack, IP_SERVER, PORT_SERVER);
 	messagePending.push_back(tempPending);
@@ -81,7 +95,6 @@ void MessageConfirmed(int _ID) {	// SOLO PARA EL CON
 
 	if (found) { messagePending.erase(iteratorToDelete); }
 }
-
 
 void DibujaSFML()
 {
@@ -204,6 +217,7 @@ void DibujaSFML()
 				}
 				case PIN:
 				{
+					std::cout << "PING RECIBIDO" << std::endl;
 					pck >> idMessage;
 					sf::Packet pckAck;
 					pckAck << Commands::ACK;
@@ -219,8 +233,11 @@ void DibujaSFML()
 		}
 
 		//REENVIAR PENDIENTES CADA 500ms.
-		SendMessages(chronoDeltaTime.getElapsedTime().asMilliseconds());
-		chronoDeltaTime.restart();
+		int time = chronoDeltaTime.restart().asMilliseconds();
+		//std::cout << time << std::endl;
+		SendMessages(time);
+		//std::cout << chronoDeltaTime.getElapsedTime().asMilliseconds() << std::endl;
+		//chronoDeltaTime.restart().asMilliseconds();
 
 		window.clear();
 

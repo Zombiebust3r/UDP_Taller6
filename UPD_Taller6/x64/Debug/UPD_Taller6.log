@@ -1,4 +1,5 @@
 ﻿  Source_Server.cpp
-c:\users\dpeco\documents\github\udp_taller6\upd_taller6\source_server.cpp(241): warning C4101: 'idMessage': unreferenced local variable
-  UPD_Taller6.vcxproj -> C:\Users\dpeco\Documents\GitHub\UDP_Taller6\x64\Debug\UPD_Taller6.exe
-  UPD_Taller6.vcxproj -> C:\Users\dpeco\Documents\GitHub\UDP_Taller6\x64\Debug\UPD_Taller6.pdb (Partial PDB)
+d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(251): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
+d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(273): warning C4101: 'idMessage': variable local sin referencia
+  UPD_Taller6.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UPD_Taller6.exe
+  UPD_Taller6.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UPD_Taller6.pdb (Partial PDB)

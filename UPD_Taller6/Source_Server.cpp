@@ -7,8 +7,8 @@
 #define LEFT_POS 200
 
 #define MAXPINTTRIES 5
-#define PINGMAXTIME_MS 10000
-#define COMMANDMAXTIME_MS 500
+#define PINGMAXTIME_MS 500
+#define COMMANDMAXTIME_MS 5000
 
 #define PERCENT_PACKETLOSS 0.5
 
@@ -54,14 +54,17 @@ sf::Vector2i RandoPosGenerator() {
 	temp.y = (rand() % 401) + 200; //random lel
 	return temp;
 }
-void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsigned short _port);
+
+void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsigned short _port);	//PREDEFINE
+
+
 Player MakePlayer(sf::IpAddress ipRem, short portRem) {
 
 	Player tempPlayer;
 	tempPlayer.ip = ipRem;
 	tempPlayer.port = portRem;
 	tempPlayer.playerID = playerID++;
-	tempPlayer.pjColor = sf::Color::Red;
+	tempPlayer.pjColor = sf::Color(rand() % 255 + 0, rand() % 255 + 0, rand() % 255 + 0, 255);
 	tempPlayer.pos = RandoPosGenerator();
 	tempPlayer.pingTries = 0;
 	sf::Packet pinPacket;
@@ -164,7 +167,35 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 
 void SendMessages(int deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN QUE MANDAR SIEMPRE Y CUANDO EL JUGADOR AL QUE SE ENVÍA NO ESTÁ DESCONECTADO
 	std::vector<PendingMessage>::iterator messageToDelete;
-	for (auto i : messagePending) {
+	//std::cout << "MESSAGE SIZE: " << messagePending.size() << std::endl;
+	for (int i = 0; i < messagePending.size(); i++) {
+		bool send = true;
+		messagePending[i].time += deltaTime;
+		if (messagePending[i].time > messagePending[i].maxTime) {
+			//RESEND MESSAGE
+			if (messagePending[i].maxTime == PINGMAXTIME_MS) { //RESSENDING PING
+				int playerIndex = PlayerIndexByIP(messagePending[i].targetAdress);
+				if (playerIndex != -1) {
+					players[playerIndex].pingTries += 1;
+					std::cout << "PLAYER " << players[playerIndex].playerID << "PING TRIES" << players[playerIndex].pingTries << std::endl;
+					if (players[playerIndex].pingTries >= MAXPINTTRIES) {
+						std::cout << "DISCONNECTED" << std::endl;
+						//DISCONNECT THAT PLAYER -----------------------------------------------------------------------------------------------------------------------------------
+						std::vector<Player>::iterator playerToDelete = PlayerItIndexByIP(messagePending[i].targetAdress);
+						if (playerToDelete != players.end()) players.erase(playerToDelete);
+						//DELETE PING MESSAGE FROM PENDING MESSAGES ----------------------------------------------------------------------------------------------------------------
+						messageToDelete = MessageItIndexByIP(messagePending[i].id);
+						send = false;
+					}
+				}
+			}
+			if (send) { sock.send(messagePending[i].packet, messagePending[i].targetAdress, messagePending[i].port); }
+			else { if (messageToDelete != messagePending.end()) messagePending.erase(messageToDelete); }
+			messagePending[i].time = 0;
+		}
+	}
+	
+	/*for (auto i : messagePending) {
 		bool send = true;
 		i.time += deltaTime;
 		if (i.time > i.maxTime) {
@@ -187,7 +218,7 @@ void SendMessages(int deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN QUE
 			else { if (messageToDelete != messagePending.end()) messagePending.erase(messageToDelete); }
 			i.time = 0;
 		}
-	}
+	}*/
 }
 
 void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
@@ -200,6 +231,7 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 		if (iteratorToDelete->id == _ID) {
 			//FOUND MY MESSAGE TO DELETE
 			if (iteratorToDelete->maxTime == PINGMAXTIME_MS) {
+				std::cout << "ACK PING" << std::endl;
 				pingMessage = true;
 				int playerIndex = PlayerIndexByIP(iteratorToDelete->targetAdress);
 				if (playerIndex != -1) {
@@ -216,8 +248,8 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 
 int main()
 {
-	
-
+	srand(time(NULL));
+	sock.setBlocking(false);
 	sf::Socket::Status status = sock.bind(50000);
 	if (status != sf::Socket::Done)
 	{

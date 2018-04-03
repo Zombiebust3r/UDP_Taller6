@@ -5,7 +5,7 @@
 #define RIGHT_POS 600
 #define LEFT_POS 200
 
-enum Commands { HEY, CON, NEW, MOV };
+enum Commands { HEY, CON, NEW, ACK, MOV };
 
 int playerID = 1; //se irá sumando 1 cada jugador nuevo
 int actualID = 0;
@@ -44,7 +44,7 @@ Player MakePlayer(sf::IpAddress ipRem, short portRem) {
 	tempPlayer.playerID = playerID++;
 	tempPlayer.pjColor = sf::Color::Red;
 	tempPlayer.pos = RandoPosGenerator();
-
+	
 	return tempPlayer;
 }
 
@@ -61,7 +61,7 @@ void SendCon(Player player, std::vector<Player> players, int idMessage) {
 	pckCon << player.pos.y;
 	if (players.size() > 0) {
 		for (int i = 0; i < players.size() - 1; i++) {
-			std::cout << "sending player: " << i << std::endl;
+			std::cout << "sending old player: " << i << std::endl;
 			//id, color, pos
 			pckCon << players[i].playerID;
 			pckCon << players[i].pjColor.r;//color
@@ -107,7 +107,7 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 	bool found = false;
 	std::vector<PendingMessage>::iterator iteratorToDelete = messagePending.begin();
 
-	while (!found || (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
+	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
 		if (iteratorToDelete->id == _ID) {
 			//FOUND MY MESSAGE TO DELETE
 			found = true;
@@ -141,11 +141,13 @@ int main()
 			if (status == sf::Socket::Done)
 			{
 				int command;
+				Player tempPlayer;
+				int idMessage;
+
 				pck >> command;
 				switch (command) {
 				case HEY:
-
-					Player tempPlayer;
+					std::cout << "RECEIVED HEY FROM PORT " << portRem << std::endl;
 					//comprobar si es el primero
 					int idMessage;
 					pck >> idMessage;
@@ -157,16 +159,27 @@ int main()
 							if (ipRem == players[it].ip && portRem == players[it].port) {
 								repeated = true;
 								tempPlayer = players[it]; //guardamos info jugador para reenviar paquete
-								std::cout << "rep";
+								std::cout << "repeated player" << std::endl;
 							}
 							it++;
 						}
 						if (!repeated) {//crear usuario
 							tempPlayer = MakePlayer(ipRem, portRem);
+							
+							for (int i = 0; i < players.size(); i++) {//aquí iria añadir NEW al resto
+								sf::Packet pckNew;
+								pckNew << Commands::NEW;
+								pckNew << tempPlayer.playerID;
+								pckNew << tempPlayer.pjColor.r;
+								pckNew << tempPlayer.pjColor.g;
+								pckNew << tempPlayer.pjColor.b;
+								pckNew << tempPlayer.pos.x;
+								pckNew << tempPlayer.pos.y;
+								std::cout << "envio new al puerto " << players[i].port << std::endl;
+								AddMessage(pckNew, players[i].ip, players[i].port);
+							}
 							//añadir usuario a lista
 							players.push_back(tempPlayer);
-
-							//aquí iria añadir NEW al resto
 						}
 						
 					}
@@ -177,9 +190,14 @@ int main()
 						players.push_back(tempPlayer);
 					}
 					//añadido usuario
-					std::cout << players.size() << std::endl;
+					std::cout << "Current player size: " << players.size() << std::endl;
 					//enviar paquete
 					SendCon(tempPlayer, players, idMessage);
+					break;
+					
+				case ACK:
+					pck >> idMessage;
+					MessageConfirmed(idMessage);
 					break;
 				}
 

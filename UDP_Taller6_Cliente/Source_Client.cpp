@@ -5,7 +5,7 @@
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
 
-enum Commands { HEY, CON, NEW, MOV };
+enum Commands { HEY, CON, NEW, ACK, MOV };
 
 int pos;
 sf::UdpSocket sock;
@@ -13,8 +13,6 @@ int actualID = 0;
 
 struct Player
 {
-	sf::IpAddress ip;
-	unsigned short port;
 	sf::Vector2i pos;
 	int playerID;
 	sf::Color pjColor;
@@ -25,7 +23,6 @@ struct PendingMessage {
 	int id;
 	int time;
 };
-
 std::vector<Player> players = std::vector<Player>();
 
 //HACER UN SISTEMA PARA ENVIO HASTA CONFIRMACIÓN:
@@ -66,7 +63,7 @@ void MessageConfirmed(int _ID) {	// SOLO PARA EL CON
 	bool found = false;
 	std::vector<PendingMessage>::iterator iteratorToDelete = messagePending.begin();
 
-	while( !found || (indexToDelete < messagePending.size()) ) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
+	while( !found && (indexToDelete < messagePending.size()) ) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
 		if (iteratorToDelete->id == _ID) {
 			//FOUND MY MESSAGE TO DELETE
 			found = true;
@@ -131,12 +128,65 @@ void DibujaSFML()
 			//Gestionar si se conecta un nuevo jugador con prefijo NEW en el packet.
 			//Gestionar si un jugador se mueve: Recibimos su ID y su nueva pos como dos ints (x, y) por separado con un prefijo MOV en el packet.
 			int command;
+			int idMessage;
 			pck >> command;
+			Player sPlayer;
 			switch (command) {
 			case CON:
 				int numPlayers;
 				pck >> numPlayers;
 				std::cout << "recibo un CON con " << numPlayers << " jugs" << std::endl;
+				pck >> sPlayer.playerID;
+				pck >> sPlayer.pjColor.r;
+				pck >> sPlayer.pjColor.g;
+				pck >> sPlayer.pjColor.b;
+				pck >> sPlayer.pos.x;
+				pck >> sPlayer.pos.y;
+				players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector
+				std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
+				for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
+					std::cout << "other jugador: " << i << std::endl;
+					Player tempPlayer;
+					pck >> tempPlayer.playerID;
+					pck >> tempPlayer.pjColor.r;
+					pck >> tempPlayer.pjColor.g;
+					pck >> tempPlayer.pjColor.b;
+					pck >> tempPlayer.pos.x;
+					pck >> tempPlayer.pos.y;
+					players.push_back(tempPlayer);
+				}
+				pck >> idMessage;
+				MessageConfirmed(idMessage);
+				break;
+			case NEW:
+				//pillar jugador y devolver ack con idmessage
+				Player tempPlayer;
+				pck >> tempPlayer.playerID;			
+				pck >> tempPlayer.pjColor.r;
+				pck >> tempPlayer.pjColor.g;
+				pck >> tempPlayer.pjColor.b;
+				pck >> tempPlayer.pos.x;
+				pck >> tempPlayer.pos.y;
+
+				std::cout << "recibo un nuevo jugador id: " << tempPlayer.playerID << std::endl;
+				//revisar si ya tengo a este jugador i guess
+				int it = 0;
+				bool found = false;
+				while (!found && (it < players.size())) {
+					if (tempPlayer.playerID == players[it].playerID) found = true;
+					it++;
+				}
+
+				if (!found) players.push_back(tempPlayer);
+				else std::cout << "Se ha enviado un jugador repetido" << std::endl;
+				//enviar ack
+				pck >> idMessage;
+				sf::Packet pckAck;
+				pckAck << Commands::ACK;
+				pckAck << idMessage;
+				sock.send(pckAck, IP_SERVER, PORT_SERVER);
+				std::cout << "enviado ACK" << std::endl;
+				std::cout << "Confirmacion numero de jugadores en lista: " << players.size() << std::endl;
 				break;
 			}
 		}

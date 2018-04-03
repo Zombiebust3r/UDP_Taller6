@@ -1,3 +1,4 @@
 ﻿  Source_Server.cpp
+e:\yosm\documents\uni\3r\3r2sem\redes\bloc2\udp_taller6\upd_taller6\source_server.cpp(145): warning C4101: 'idMessage': variable local sin referencia
   UPD_Taller6.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UPD_Taller6.exe
   UPD_Taller6.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UPD_Taller6.pdb (Partial PDB)

@@ -1,5 +1,4 @@
 ﻿  Source_Server.cpp
-d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(270): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
-d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(294): warning C4101: 'idMessage': variable local sin referencia
-  UPD_Taller6.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UPD_Taller6.exe
-  UPD_Taller6.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UPD_Taller6.pdb (Partial PDB)
+e:\yosm\documents\uni\3r\3r2sem\redes\bloc2\udp_taller6\upd_taller6\source_server.cpp(312): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
+  UPD_Taller6.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UPD_Taller6.exe
+  UPD_Taller6.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UPD_Taller6.pdb (Partial PDB)

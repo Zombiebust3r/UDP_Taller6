@@ -3,6 +3,11 @@
 #include <iostream>
 #include <random>
 
+#include "InputMemoryBitStream.h"
+#include "InputMemoryStream.h"
+#include "OutputMemoryBitStream.h"
+#include "OutputMemoryStream.h"
+
 #define RIGHT_POS 600
 #define LEFT_POS 200
 
@@ -14,8 +19,8 @@
 
 enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE };
 
-int playerID = 1; //se irá sumando 1 cada jugador nuevo
-int actualID = 0;
+uint8_t playerID = 1; //se irá sumando 1 cada jugador nuevo
+unsigned short actualID = 0;
 sf::UdpSocket sock;
 bool firstReset = true;
 
@@ -23,10 +28,10 @@ struct Player
 {
 	sf::IpAddress ip;
 	unsigned short port;
-	sf::Vector2i pos;
-	int playerID;
+	sf::Vector2<short> pos;
+	uint8_t playerID;
 	sf::Color pjColor;
-	int pingTries;
+	uint8_t pingTries;
 };
 
 struct PendingMessage {
@@ -48,14 +53,14 @@ float GetRandomFloat() {
 	std::uniform_real_distribution<float> dis(0.f, 1.f);
 	return dis(gen);
 }
-sf::Vector2i RandoPosGenerator() {
-	sf::Vector2i temp;
+sf::Vector2<short> RandoPosGenerator() {
+	sf::Vector2<short> temp;
 	temp.x = (rand() % 401) + 200; //entre 200 y 600
 	temp.y = (rand() % 401) + 200; //random lel
 	return temp;
 }
 
-void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsigned short _port);	//PREDEFINE
+void AddMessage(Commands messageType, OutputMemoryStream _oms, sf::IpAddress _ip, unsigned short _port);	//PREDEFINE
 
 
 Player MakePlayer(sf::IpAddress ipRem, short portRem) {
@@ -68,9 +73,9 @@ Player MakePlayer(sf::IpAddress ipRem, short portRem) {
 	tempPlayer.pjColor = sf::Color(rand() % 255 + 0, rand() % 255 + 0, rand() % 255 + 0, 255);
 	tempPlayer.pos = RandoPosGenerator();
 	tempPlayer.pingTries = 0;
-	sf::Packet pinPacket;
-	pinPacket << Commands::PIN;
-	AddMessage(Commands::PIN, pinPacket, tempPlayer.ip, tempPlayer.port);	//ADD PING MESSAGE EACH TIME WE CREATE A NEW PLAYER
+	OutputMemoryStream oms;
+	oms.Write(uint8_t(Commands::PIN));
+	AddMessage(Commands::PIN, oms, tempPlayer.ip, tempPlayer.port);	//ADD PING MESSAGE EACH TIME WE CREATE A NEW PLAYER
 	
 	return tempPlayer;
 }
@@ -110,7 +115,36 @@ std::vector<PendingMessage>::iterator MessageItIndexByIP(int _id) {
 
 void SendCon(Player player, std::vector<Player> players, int idMessage) {
 	//enviar paquete
+	OutputMemoryStream oms;
 	sf::Packet pckCon;
+
+	
+	oms.Write((uint8_t)Commands::CON);
+	oms.Write((uint8_t)players.size()); 
+	oms.Write(player.playerID);//id
+	oms.Write(player.pjColor.r);//color
+	oms.Write(player.pjColor.g);
+	oms.Write(player.pjColor.b);
+	oms.Write(player.pos.x); //pos
+	oms.Write(player.pos.y);
+
+	if (players.size() > 0) {
+		for (int i = 0; i < players.size() - 1; i++) {
+			std::cout << "sending old player: " << i << std::endl;
+			//id, color, pos
+			oms.Write(players[i].playerID);
+			oms.Write(players[i].pjColor.r);//color
+			oms.Write(players[i].pjColor.g);
+			oms.Write(players[i].pjColor.b);
+			oms.Write(players[i].pos.x); //pos
+			oms.Write(players[i].pos.y);
+		}
+	}
+	pckCon << oms.GetBufferPtr();
+	pckCon << oms.GetLength();
+	//std::cout << unsigned(oms.GetBufferPtr()) << std::endl;
+	sock.send(pckCon, player.ip, player.port);
+	/*
 	pckCon << CON;
 	pckCon << int(players.size()); //así envía el numero de jugadores a añadir
 	pckCon << player.playerID;//id
@@ -132,14 +166,19 @@ void SendCon(Player player, std::vector<Player> players, int idMessage) {
 		}
 	}
 	pckCon << idMessage;
-	sock.send(pckCon, player.ip, player.port);
+	*/
 }
 
-void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsigned short _port) {	// SOLO PARA EL NEW
+void AddMessage(Commands messageType, OutputMemoryStream _oms, sf::IpAddress _ip, unsigned short _port) {	// SOLO PARA EL NEW
+	_oms.Write(actualID);
+	sf::Packet pack;
+	pack << _oms.GetBufferPtr();
+	pack << _oms.GetLength();
+
 	PendingMessage tempPending;
 	tempPending.id = actualID;
-	_pack << actualID;
-	tempPending.packet = _pack;
+	
+	tempPending.packet = pack;
 	tempPending.targetAdress = _ip;
 	tempPending.port = _port;
 	tempPending.time = 0.0f;
@@ -160,7 +199,7 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 		break;
 	}
 
-	if(tempPending.maxTime != PINGMAXTIME_MS) sock.send(_pack, _ip, _port);
+	if(tempPending.maxTime != PINGMAXTIME_MS) sock.send(pack, _ip, _port);
 	messagePending.push_back(tempPending);
 
 	actualID++;
@@ -185,14 +224,17 @@ void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN Q
 					if (players[playerIndex].pingTries >= MAXPINTTRIES) {
 						std::cout << "DISCONNECTED PLAYER " << players[playerIndex].playerID << std::endl;
 						//CREATE DIS PACKET: DIS_IDPLAYER_IDMESSAGE
-						sf::Packet disconnectionPacket;	//PAQUETE PARA EL RESTO DE JUGADORES QUE NO DESCONECTAS
-						disconnectionPacket << Commands::DIS;
+						OutputMemoryStream disconnectionOms;	//PAQUETE PARA EL RESTO DE JUGADORES QUE NO DESCONECTAS
+						disconnectionOms.Write(Commands::DIS);
 						sf::Packet exePacket; //PAQUETE PARA EL QUE DESCONECTAS
-						exePacket << Commands::EXE;
+						OutputMemoryStream exeOms;
+						exeOms.Write(uint8_t(Commands::EXE));
+						exePacket << exeOms.GetBufferPtr();
+						exePacket << exeOms.GetLength();
 						//DISCONNECT THAT PLAYER -----------------------------------------------------------------------------------------------------------------------------------
 						std::vector<Player>::iterator playerToDelete = PlayerItIndexByPORT(messagePending[i].port);
 						sock.send(exePacket, playerToDelete->ip, playerToDelete->port);
-						disconnectionPacket << playerToDelete->playerID;
+						disconnectionOms.Write(playerToDelete->playerID);
 						if (playerToDelete != players.end()) players.erase(playerToDelete);
 						//DELETE PING MESSAGE FROM PENDING MESSAGES ----------------------------------------------------------------------------------------------------------------
 						messageToDelete = MessageItIndexByIP(messagePending[i].id);
@@ -200,7 +242,7 @@ void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN Q
 						
 						//MANDAR A TODOS LOS JUGADORES:
 						for (int toAll = 0; toAll < players.size(); toAll++) {
-							AddMessage(Commands::DIS, disconnectionPacket, players[toAll].ip, players[toAll].port);
+							AddMessage(Commands::DIS, disconnectionOms, players[toAll].ip, players[toAll].port);
 						}
 					}
 				}
@@ -289,12 +331,85 @@ int main()
 			//std::cout << "postReceive------------------------------------------------------------------------" << std::endl;
 			if (status == sf::Socket::Done)
 			{
+				char* message = NULL;
+				uint32_t size;
+				pck >> message;
+				pck >> size;
+				InputMemoryStream ims(message, size);
+				Player tempPlayer;
+
+				float randomNumber = GetRandomFloat();
+
+				uint8_t command = 0;
+				ims.Read(&command);
+				if (randomNumber > PERCENT_PACKETLOSS) {
+
+					uint8_t idMessage;
+					switch (command) {
+					case HEY:
+						std::cout << "RECEIVED HEY FROM PORT " << portRem << std::endl;
+						//comprobar si es el primero
+						ims.Read(&idMessage);
+						if (players.size() > 0) {
+							//comprobar si ya existe via ip
+							int it = 0;
+							bool repeated = false;
+							while (!repeated && (it < players.size())) {
+								if (ipRem == players[it].ip && portRem == players[it].port) {
+									repeated = true;
+									tempPlayer = players[it]; //guardamos info jugador para reenviar paquete
+									std::cout << "repeated player" << std::endl;
+								}
+								it++;
+							}
+							if (!repeated) {//crear usuario
+								tempPlayer = MakePlayer(ipRem, portRem);
+
+								for (int i = 0; i < players.size(); i++) {//aquí iria añadir NEW al resto
+									OutputMemoryStream oms;
+									oms.Write(uint8_t(Commands::NEW));
+									oms.Write(tempPlayer.playerID);
+									oms.Write(tempPlayer.pjColor.r);
+									oms.Write(tempPlayer.pjColor.g);
+									oms.Write(tempPlayer.pjColor.b);
+									oms.Write(tempPlayer.pos.x);
+									oms.Write(tempPlayer.pos.y);
+									std::cout << "envio new al puerto " << players[i].port << std::endl;
+									AddMessage(Commands::NEW, oms, players[i].ip, players[i].port);
+								}
+								//añadir usuario a lista
+								players.push_back(tempPlayer);
+							}
+
+						}
+						else {
+							//crear usuario
+							tempPlayer = MakePlayer(ipRem, portRem);
+							//añadir usuario a lista
+							players.push_back(tempPlayer);
+						}
+						//añadido usuario
+						std::cout << "Current player size: " << players.size() << std::endl;
+						//enviar paquete
+						SendCon(tempPlayer, players, idMessage);
+						break;
+
+					case ACK:
+						ims.Read(&idMessage);
+						break;
+					}
+				}
+				else {
+					std::cout << "Se ha ignorado el mensaje con comando " << command << " (Roll: " << randomNumber << ")" << std::endl;
+				}
+				/*
 				int command;
 				Player tempPlayer;
 				int idMessage;
 
 				pck >> command;
 				float randomNumber = GetRandomFloat();
+				
 				if (randomNumber > PERCENT_PACKETLOSS) {
 					switch (command) {
 					case HEY:
@@ -355,7 +470,7 @@ int main()
 				else {
 					std::cout << "Se ha ignorado el mensaje con comando " << command << " (Roll: " << randomNumber << ")" << std::endl;
 				}
-
+				*/
 				/*
 				int pos;
 				pck >> pos;

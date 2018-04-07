@@ -3,6 +3,11 @@
 #include <iostream>
 #include <random>
 
+#include "InputMemoryBitStream.h"
+#include "InputMemoryStream.h"
+#include "OutputMemoryBitStream.h"
+#include "OutputMemoryStream.h"
+
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
 
@@ -12,18 +17,18 @@ enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE };
 
 int pos;
 sf::UdpSocket sock;
-int actualID = 0;
+unsigned short actualID = 0;
 
 struct Player
 {
-	sf::Vector2i pos;
-	int playerID;
+	sf::Vector2<short> pos;
+	uint8_t playerID;
 	sf::Color pjColor;
 };
 
 struct PendingMessage {
 	sf::Packet packet;
-	int id;
+	unsigned short id;
 	float time;
 };
 std::vector<Player> players = std::vector<Player>();
@@ -78,14 +83,17 @@ void SendMessages(int deltaTime) {
 	
 }
 
-void AddMessage(sf::Packet _pack) {	//SOLO PARA EL HEY
+void AddMessage(OutputMemoryStream _oms) {	//SOLO PARA EL HEY
 	PendingMessage tempPending;
 	tempPending.id = actualID;
-	_pack << actualID;
-	tempPending.packet = _pack;
+	_oms.Write(actualID);
+	sf::Packet pack;
+	pack << _oms.GetBufferPtr();
+	pack << _oms.GetLength();
+	tempPending.packet = pack;
 	tempPending.time = 0.0f;
 
-	sock.send(_pack, IP_SERVER, PORT_SERVER);
+	sock.send(pack, IP_SERVER, PORT_SERVER);
 	messagePending.push_back(tempPending);
 
 	actualID++;
@@ -131,7 +139,7 @@ void DibujaSFML()
 					sf::Packet pckLeft;
 					int posAux = pos - 1;
 					pckLeft << posAux;
-					sock.send(pckLeft, IP_SERVER, PORT_SERVER);
+					//sock.send(pckLeft, IP_SERVER, PORT_SERVER);
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
 				}
@@ -140,7 +148,7 @@ void DibujaSFML()
 					sf::Packet pckRight;
 					int posAux = pos + 1;
 					pckRight << posAux;
-					sock.send(pckRight, IP_SERVER, PORT_SERVER);
+					//sock.send(pckRight, IP_SERVER, PORT_SERVER);
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 				}
 				break;
@@ -159,38 +167,43 @@ void DibujaSFML()
 		{
 			//Gestionar si se conecta un nuevo jugador con prefijo NEW en el packet.
 			//Gestionar si un jugador se mueve: Recibimos su ID y su nueva pos como dos ints (x, y) por separado con un prefijo MOV en el packet.
-			int command;
-			int idMessage;
-			pck >> command;
+			char* message = NULL;
+			uint32_t size;
+			pck >> message;
+			pck >> size;
+			InputMemoryStream ims(message, size);
+			uint8_t command;
+			ims.Read(&command);
 			Player sPlayer;
 			float randomNumber = GetRandomFloat();
 			if (randomNumber > PERCENT_PACKETLOSS){
+				uint8_t idMessage;
 				switch (command) {
 					case CON:
 					{
-						int numPlayers;
-						pck >> numPlayers;
-						std::cout << "recibo un CON con " << numPlayers << " jugs" << std::endl;
-						pck >> sPlayer.playerID;
-						pck >> sPlayer.pjColor.r;
-						pck >> sPlayer.pjColor.g;
-						pck >> sPlayer.pjColor.b;
-						pck >> sPlayer.pos.x;
-						pck >> sPlayer.pos.y;
+						uint8_t numPlayers;
+						ims.Read(&numPlayers);
+						std::cout << "recibo un CON con " << unsigned (numPlayers) << " jugs" << std::endl;
+						ims.Read(&sPlayer.playerID);
+						ims.Read(&sPlayer.pjColor.r);
+						ims.Read(&sPlayer.pjColor.g);
+						ims.Read(&sPlayer.pjColor.b);
+						ims.Read(&sPlayer.pos.x);
+						ims.Read(&sPlayer.pos.y);
 						players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector
-						std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
+						std::cout << "OWN ID: " << unsigned(sPlayer.playerID) << std::endl;
 						for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
 							std::cout << "other jugador: " << i << std::endl;
 							Player tempPlayer;
-							pck >> tempPlayer.playerID;
-							pck >> tempPlayer.pjColor.r;
-							pck >> tempPlayer.pjColor.g;
-							pck >> tempPlayer.pjColor.b;
-							pck >> tempPlayer.pos.x;
-							pck >> tempPlayer.pos.y;
+							ims.Read(&tempPlayer.playerID);
+							ims.Read(&tempPlayer.pjColor.r);
+							ims.Read(&tempPlayer.pjColor.g);
+							ims.Read(&tempPlayer.pjColor.b);
+							ims.Read(&tempPlayer.pos.x);
+							ims.Read(&tempPlayer.pos.y);
 							players.push_back(tempPlayer);
 						}
-						pck >> idMessage;
+						ims.Read(&idMessage);
 						MessageConfirmed(idMessage);
 						break;
 					}
@@ -198,12 +211,12 @@ void DibujaSFML()
 					{
 						//pillar jugador y devolver ack con idmessage
 						Player tempPlayer;
-						pck >> tempPlayer.playerID;
-						pck >> tempPlayer.pjColor.r;
-						pck >> tempPlayer.pjColor.g;
-						pck >> tempPlayer.pjColor.b;
-						pck >> tempPlayer.pos.x;
-						pck >> tempPlayer.pos.y;
+						ims.Read(&tempPlayer.playerID);
+						ims.Read(&tempPlayer.pjColor.r);
+						ims.Read(&tempPlayer.pjColor.g);
+						ims.Read(&tempPlayer.pjColor.b);
+						ims.Read(&tempPlayer.pos.x);
+						ims.Read(&tempPlayer.pos.y);
 
 						std::cout << "recibo un nuevo jugador id: " << tempPlayer.playerID << std::endl;
 						//revisar si ya tengo a este jugador i guess
@@ -217,10 +230,13 @@ void DibujaSFML()
 						if (!found) players.push_back(tempPlayer);
 						else std::cout << "Se ha enviado un jugador repetido" << std::endl;
 						//enviar ack
-						pck >> idMessage;
+						ims.Read(&idMessage);
 						sf::Packet pckAck;
-						pckAck << Commands::ACK;
-						pckAck << idMessage;
+						OutputMemoryStream omsAck;
+						omsAck.Write(uint8_t(Commands::ACK));
+						omsAck.Write(idMessage);
+						pckAck << omsAck.GetBufferPtr();
+						pckAck << omsAck.GetLength();
 						sock.send(pckAck, IP_SERVER, PORT_SERVER);
 						std::cout << "enviado ACK" << std::endl;
 						std::cout << "Confirmacion numero de jugadores en lista: " << players.size() << std::endl;
@@ -229,25 +245,32 @@ void DibujaSFML()
 					case PIN:
 					{
 						std::cout << "PING RECIBIDO" << std::endl;
-						pck >> idMessage;
+						ims.Read(&idMessage);
 						sf::Packet pckAck;
+						OutputMemoryStream omsAck;
 						pckAck << Commands::ACK;
-						pckAck << idMessage;
+						omsAck.Write(idMessage);
+						pckAck << omsAck.GetBufferPtr();
+						pckAck << omsAck.GetLength();
 						sock.send(pckAck, IP_SERVER, PORT_SERVER);
 						break;
 					}
 					case DIS: {
-						int playerToDeleteID;
-						pck >> playerToDeleteID;
+						uint8_t playerToDeleteID;
+						ims.Read(&playerToDeleteID);
 						std::cout << "PLAYER DISCONNECTED WITH ID: " << playerToDeleteID << std::endl;
 						std::vector<Player>::iterator itErased = PlayerItIndexByID(playerToDeleteID);
 						if (itErased != players.end()) {
 							players.erase(itErased);
 						}
-						pck >> idMessage;
+						ims.Read(&idMessage);
+
 						sf::Packet pckAck;
+						OutputMemoryStream omsAck;
 						pckAck << Commands::ACK;
-						pckAck << idMessage;
+						omsAck.Write(idMessage);
+						pckAck << omsAck.GetBufferPtr();
+						pckAck << omsAck.GetLength();
 						sock.send(pckAck, IP_SERVER, PORT_SERVER);
 						break;
 					}
@@ -297,9 +320,12 @@ int main(){
 	pos = 200;
 	sock.setBlocking(false);
 	//sistema HEY
-	sf::Packet pckHey;
-	pckHey << Commands::HEY;
-	AddMessage(pckHey);
+	OutputMemoryStream oms;
+	//sf::Packet pckHey;
+	oms.Write(uint8_t(Commands::HEY));
+	//pckHey << Commands::HEY;
+	//std::cout << unsigned(oms.GetBufferPtr()) << std::endl;
+	AddMessage(oms);
 	DibujaSFML();
 	return 0;
 }

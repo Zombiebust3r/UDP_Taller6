@@ -35,7 +35,7 @@ struct Player
 };
 
 struct PendingMessage {
-	sf::Packet packet;
+	OutputMemoryStream* oms;
 	int id;
 	float time;
 	float maxTime;
@@ -116,7 +116,6 @@ std::vector<PendingMessage>::iterator MessageItIndexByIP(int _id) {
 void SendCon(Player player, std::vector<Player> players, int idMessage) {
 	//enviar paquete
 	OutputMemoryStream oms;
-	sf::Packet pckCon;
 
 	
 	oms.Write((uint8_t)Commands::CON);
@@ -140,10 +139,7 @@ void SendCon(Player player, std::vector<Player> players, int idMessage) {
 			oms.Write(players[i].pos.y);
 		}
 	}
-	pckCon << oms.GetBufferPtr();
-	pckCon << oms.GetLength();
-	//std::cout << unsigned(oms.GetBufferPtr()) << std::endl;
-	sock.send(pckCon, player.ip, player.port);
+	sock.send(oms.GetBufferPtr(), oms.GetLength() + 1, player.ip, player.port);
 	/*
 	pckCon << CON;
 	pckCon << int(players.size()); //así envía el numero de jugadores a añadir
@@ -171,14 +167,11 @@ void SendCon(Player player, std::vector<Player> players, int idMessage) {
 
 void AddMessage(Commands messageType, OutputMemoryStream _oms, sf::IpAddress _ip, unsigned short _port) {	// SOLO PARA EL NEW
 	_oms.Write(actualID);
-	sf::Packet pack;
-	pack << _oms.GetBufferPtr();
-	pack << _oms.GetLength();
 
 	PendingMessage tempPending;
 	tempPending.id = actualID;
 	
-	tempPending.packet = pack;
+	tempPending.oms = new OutputMemoryStream(_oms);
 	tempPending.targetAdress = _ip;
 	tempPending.port = _port;
 	tempPending.time = 0.0f;
@@ -199,7 +192,7 @@ void AddMessage(Commands messageType, OutputMemoryStream _oms, sf::IpAddress _ip
 		break;
 	}
 
-	if(tempPending.maxTime != PINGMAXTIME_MS) sock.send(pack, _ip, _port);
+	if(tempPending.maxTime != PINGMAXTIME_MS) sock.send(_oms.GetBufferPtr(), _oms.GetLength() + 1, _ip, _port);
 	messagePending.push_back(tempPending);
 
 	actualID++;
@@ -226,14 +219,11 @@ void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN Q
 						//CREATE DIS PACKET: DIS_IDPLAYER_IDMESSAGE
 						OutputMemoryStream disconnectionOms;	//PAQUETE PARA EL RESTO DE JUGADORES QUE NO DESCONECTAS
 						disconnectionOms.Write(Commands::DIS);
-						sf::Packet exePacket; //PAQUETE PARA EL QUE DESCONECTAS
-						OutputMemoryStream exeOms;
+						OutputMemoryStream exeOms; //OMS PARA DESCONECTAR
 						exeOms.Write(uint8_t(Commands::EXE));
-						exePacket << exeOms.GetBufferPtr();
-						exePacket << exeOms.GetLength();
 						//DISCONNECT THAT PLAYER -----------------------------------------------------------------------------------------------------------------------------------
 						std::vector<Player>::iterator playerToDelete = PlayerItIndexByPORT(messagePending[i].port);
-						sock.send(exePacket, playerToDelete->ip, playerToDelete->port);
+						sock.send(exeOms.GetBufferPtr(), exeOms.GetLength() + 1, playerToDelete->ip, playerToDelete->port);
 						disconnectionOms.Write(playerToDelete->playerID);
 						if (playerToDelete != players.end()) players.erase(playerToDelete);
 						//DELETE PING MESSAGE FROM PENDING MESSAGES ----------------------------------------------------------------------------------------------------------------
@@ -247,7 +237,7 @@ void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN Q
 					}
 				}
 			}
-			if (send) { sock.send(messagePending[i].packet, messagePending[i].targetAdress, messagePending[i].port); messagePending[i].time = 0.0f;	}
+			if (send) { sock.send(messagePending[i].oms->GetBufferPtr(), messagePending[i].oms->GetLength() + 1, messagePending[i].targetAdress, messagePending[i].port); messagePending[i].time = 0.0f;	}
 			else { 
 				if (messageToDelete != messagePending.end()) 
 					messagePending.erase(messageToDelete); 
@@ -324,18 +314,17 @@ int main()
 	{
 		if (clock.getElapsedTime().asMilliseconds() > 200)
 		{
-			sf::Packet pck;
+			char message[2000];
+			uint32_t size = 0;
+			size_t received = 0;
 			sf::IpAddress ipRem; unsigned short portRem;
 			//std::cout << "preReceive------------------------------------------------------------------------" << std::endl;
-			status = sock.receive(pck, ipRem, portRem);
-			//std::cout << "postReceive------------------------------------------------------------------------" << std::endl;
+			status = sock.receive(message, sizeof(message), received, ipRem, portRem);
+			std::cout << "postReceive------------------------------------------------------------------------" << std::endl;
 			if (status == sf::Socket::Done)
 			{
-				char* message = NULL;
-				uint32_t size;
-				pck >> message;
-				pck >> size;
-				InputMemoryStream ims(message, size);
+				std::cout << message << std::endl;
+				InputMemoryStream ims(message, received);
 				Player tempPlayer;
 
 				float randomNumber = GetRandomFloat();
@@ -396,6 +385,7 @@ int main()
 
 					case ACK:
 						ims.Read(&idMessage);
+						MessageConfirmed(idMessage);
 						break;
 					}
 				}

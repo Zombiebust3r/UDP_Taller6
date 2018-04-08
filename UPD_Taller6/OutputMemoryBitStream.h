@@ -2,7 +2,7 @@
 #include <memory>
 #include <algorithm>
 #include <string>
-//#include "General.h"
+#define max(a,b) (((a) > (b)) ? (a):(b))
 
 class OutputMemoryBitStream
 {
@@ -61,7 +61,7 @@ public:
 		uint32_t nextBitHead = mBitHead + static_cast<uint32_t>(_inBitCount);
 		if (nextBitHead > mBitCapacity)
 		{
-			ReallocBuffer(std::max(mBitCapacity * 2, nextBitHead));
+			ReallocBuffer(max(mBitCapacity * 2, nextBitHead));
 		}
 		//Calculamos en qué byte del buffer estamos dividiendo el head / 8
 		uint32_t byteOffset = mBitHead >> 3;

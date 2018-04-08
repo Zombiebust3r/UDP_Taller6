@@ -1,3 +1,4 @@
 ﻿  Source_Client.cpp
+e:\yosm\documents\uni\3r\3r2sem\redes\bloc2\udp_taller6\udp_taller6_cliente\source_client.cpp(169): warning C4267: 'argumento': conversión de 'size_t' a 'uint32_t'; posible pérdida de datos
   UDP_Taller6_Cliente.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UDP_Taller6_Cliente.exe
   UDP_Taller6_Cliente.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UDP_Taller6_Cliente.pdb (Partial PDB)

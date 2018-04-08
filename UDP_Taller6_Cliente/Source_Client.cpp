@@ -27,7 +27,7 @@ struct Player
 };
 
 struct PendingMessage {
-	sf::Packet packet;
+	OutputMemoryStream* oms;
 	unsigned short id;
 	float time;
 };
@@ -65,7 +65,7 @@ void SendMessages(int deltaTime) {
 		if (messagePending[i].time > 500) {
 			std::cout << "-------------------------------------------------------reenvia mensaje" << std::endl;
 			//RESEND MESSAGE
-			sock.send(messagePending[i].packet, IP_SERVER, PORT_SERVER);
+			sock.send(messagePending[i].oms->GetBufferPtr(), messagePending[i].oms->GetLength() + 1, IP_SERVER, PORT_SERVER);
 			messagePending[i].time = 0.0f;
 		}
 	}
@@ -87,13 +87,10 @@ void AddMessage(OutputMemoryStream _oms) {	//SOLO PARA EL HEY
 	PendingMessage tempPending;
 	tempPending.id = actualID;
 	_oms.Write(actualID);
-	sf::Packet pack;
-	pack << _oms.GetBufferPtr();
-	pack << _oms.GetLength();
-	tempPending.packet = pack;
+	tempPending.oms = new OutputMemoryStream(_oms);
 	tempPending.time = 0.0f;
 
-	sock.send(pack, IP_SERVER, PORT_SERVER);
+	sock.send(_oms.GetBufferPtr(), _oms.GetLength() + 1, IP_SERVER, PORT_SERVER);
 	messagePending.push_back(tempPending);
 
 	actualID++;
@@ -158,20 +155,18 @@ void DibujaSFML()
 
 			}
 		}
-		
-		sf::Packet pck;
+		char message[2000];
+		uint32_t size = 0;
+		size_t received = 0;
 		sf::IpAddress ipRem;
 		unsigned short portRem;
-		sf::Socket::Status status = sock.receive(pck, ipRem, portRem);
+		sf::Socket::Status status = sock.receive(message, sizeof(message), received, ipRem, portRem);
 		if (status == sf::Socket::Done)
 		{
 			//Gestionar si se conecta un nuevo jugador con prefijo NEW en el packet.
 			//Gestionar si un jugador se mueve: Recibimos su ID y su nueva pos como dos ints (x, y) por separado con un prefijo MOV en el packet.
-			char* message = NULL;
-			uint32_t size;
-			pck >> message;
-			pck >> size;
-			InputMemoryStream ims(message, size);
+			
+			InputMemoryStream ims(message, received);
 			uint8_t command;
 			ims.Read(&command);
 			Player sPlayer;
@@ -231,13 +226,10 @@ void DibujaSFML()
 						else std::cout << "Se ha enviado un jugador repetido" << std::endl;
 						//enviar ack
 						ims.Read(&idMessage);
-						sf::Packet pckAck;
 						OutputMemoryStream omsAck;
 						omsAck.Write(uint8_t(Commands::ACK));
 						omsAck.Write(idMessage);
-						pckAck << omsAck.GetBufferPtr();
-						pckAck << omsAck.GetLength();
-						sock.send(pckAck, IP_SERVER, PORT_SERVER);
+						sock.send(omsAck.GetBufferPtr(), omsAck.GetLength() + 1, IP_SERVER, PORT_SERVER);
 						std::cout << "enviado ACK" << std::endl;
 						std::cout << "Confirmacion numero de jugadores en lista: " << players.size() << std::endl;
 						break;
@@ -246,13 +238,10 @@ void DibujaSFML()
 					{
 						std::cout << "PING RECIBIDO" << std::endl;
 						ims.Read(&idMessage);
-						sf::Packet pckAck;
 						OutputMemoryStream omsAck;
-						pckAck << Commands::ACK;
+						omsAck.Write(uint8_t(Commands::ACK));
 						omsAck.Write(idMessage);
-						pckAck << omsAck.GetBufferPtr();
-						pckAck << omsAck.GetLength();
-						sock.send(pckAck, IP_SERVER, PORT_SERVER);
+						sock.send(omsAck.GetBufferPtr(), omsAck.GetLength() + 1, IP_SERVER, PORT_SERVER);
 						break;
 					}
 					case DIS: {
@@ -265,13 +254,10 @@ void DibujaSFML()
 						}
 						ims.Read(&idMessage);
 
-						sf::Packet pckAck;
 						OutputMemoryStream omsAck;
-						pckAck << Commands::ACK;
+						omsAck.Write(uint8_t(Commands::ACK));
 						omsAck.Write(idMessage);
-						pckAck << omsAck.GetBufferPtr();
-						pckAck << omsAck.GetLength();
-						sock.send(pckAck, IP_SERVER, PORT_SERVER);
+						sock.send(omsAck.GetBufferPtr(), omsAck.GetLength() + 1, IP_SERVER, PORT_SERVER);
 						break;
 					}
 					case EXE: {
@@ -324,7 +310,6 @@ int main(){
 	//sf::Packet pckHey;
 	oms.Write(uint8_t(Commands::HEY));
 	//pckHey << Commands::HEY;
-	//std::cout << unsigned(oms.GetBufferPtr()) << std::endl;
 	AddMessage(oms);
 	DibujaSFML();
 	return 0;

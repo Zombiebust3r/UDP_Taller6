@@ -1,4 +1,5 @@
 ﻿  Source_Server.cpp
-e:\yosm\documents\uni\3r\3r2sem\redes\bloc2\udp_taller6\upd_taller6\source_server.cpp(312): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
+e:\yosm\documents\uni\3r\3r2sem\redes\bloc2\udp_taller6\upd_taller6\source_server.cpp(302): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
+e:\yosm\documents\uni\3r\3r2sem\redes\bloc2\udp_taller6\upd_taller6\source_server.cpp(327): warning C4267: 'argumento': conversión de 'size_t' a 'uint32_t'; posible pérdida de datos
   UPD_Taller6.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UPD_Taller6.exe
   UPD_Taller6.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UPD_Taller6.pdb (Partial PDB)

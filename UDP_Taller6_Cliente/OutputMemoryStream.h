@@ -2,7 +2,7 @@
 #include <memory>
 #include <vector>
 #include <math.h>
-#include <algorithm>
+#define max(a,b) (((a) > (b)) ? (a):(b))
 //#include "General.h"
 
 class OutputMemoryStream
@@ -50,7 +50,7 @@ public:
 		if (resultHead > mCapacity)
 		{
 			//Si no hay espacio suficiente, pedimos más memoria
-			ReallocBuffer(std::max(mCapacity * 2, resultHead));
+			ReallocBuffer(max(mCapacity * 2, resultHead));
 		}
 		//Copiar en el buffer a partir de mHead
 		std::memcpy(mBuffer + mHead, _inData, _inByteCount);

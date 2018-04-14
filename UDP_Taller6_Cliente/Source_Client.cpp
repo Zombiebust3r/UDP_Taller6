@@ -6,13 +6,14 @@
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
 
-#define PERCENT_PACKETLOSS 0.3
+#define PERCENT_PACKETLOSS 0.01
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM };
 
 int pos;
 sf::UdpSocket sock;
 int actualID = 0;
+sf::Vector2i desiredPos = sf::Vector2i(0, 0);
 
 struct Player
 {
@@ -26,6 +27,7 @@ struct PendingMessage {
 	int id;
 	float time;
 };
+
 std::vector<Player> players = std::vector<Player>();
 
 //HACER UN SISTEMA PARA ENVIO HASTA CONFIRMACIÓN:
@@ -129,18 +131,24 @@ void DibujaSFML()
 				if (event.key.code == sf::Keyboard::Left)
 				{
 					sf::Packet pckLeft;
-					int posAux = pos - 1;
-					pckLeft << posAux;
-					sock.send(pckLeft, IP_SERVER, PORT_SERVER);
+					pckLeft << Commands::MOV;
+					desiredPos.x--;
+					pckLeft << desiredPos.x;
+					pckLeft << desiredPos.y;
+					AddMessage(pckLeft);
+					std::cout << "MOVE LEFT" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
 				}
 				else if (event.key.code == sf::Keyboard::Right)
 				{
 					sf::Packet pckRight;
-					int posAux = pos + 1;
-					pckRight << posAux;
-					sock.send(pckRight, IP_SERVER, PORT_SERVER);
+					pckRight << Commands::MOV;
+					desiredPos.x++;
+					pckRight << desiredPos.x;
+					pckRight << desiredPos.y;
+					AddMessage(pckRight);
+					std::cout << "MOVE RIGHT" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 				}
 				break;
@@ -177,6 +185,7 @@ void DibujaSFML()
 						pck >> sPlayer.pjColor.b;
 						pck >> sPlayer.pos.x;
 						pck >> sPlayer.pos.y;
+						desiredPos = sPlayer.pos;
 						players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector
 						std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
 						for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
@@ -255,6 +264,39 @@ void DibujaSFML()
 						std::cout << "Te han desconectado" << std::endl;
 						system("pause");
 						window.close();
+					}
+					case OKM: {
+						std::cout << "ME MUEVO PENDEJO" << std::endl;
+						int tempIDPlayer = -1;
+						pck >> tempIDPlayer;
+						sf::Vector2i confirmedPos;
+						pck >> confirmedPos.x;
+						pck >> confirmedPos.y;
+						std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(tempIDPlayer);
+						if (tempItPlayerToMove != players.end()) {
+							tempItPlayerToMove->pos = confirmedPos;
+						}
+
+						pck >> idMessage;
+						MessageConfirmed(idMessage);
+					}
+					case PEM: {
+						std::cout << "SE HA MOVIDO PENDEJO" << std::endl;
+						int tempIDPlayer = -1;
+						pck >> tempIDPlayer;
+						sf::Vector2i confirmedPos;
+						pck >> confirmedPos.x;
+						pck >> confirmedPos.y;
+						std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(tempIDPlayer);
+						if (tempItPlayerToMove != players.end()) {
+							tempItPlayerToMove->pos = confirmedPos;
+						}
+						pck >> idMessage;
+						std::cout << "ID MESSAGE" << idMessage << std::endl;
+						sf::Packet pckAck;
+						pckAck << Commands::ACK;
+						pckAck << idMessage;
+						sock.send(pckAck, IP_SERVER, PORT_SERVER);
 					}
 				} //esto esta bien tabulado
 			}

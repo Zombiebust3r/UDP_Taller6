@@ -10,9 +10,9 @@
 #define PINGMAXTIME_MS 5.0f
 #define COMMANDMAXTIME_MS 0.5f
 
-#define PERCENT_PACKETLOSS 0.1
+#define PERCENT_PACKETLOSS 0.01
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM };
 
 int playerID = 1; //se irá sumando 1 cada jugador nuevo
 int actualID = 0;
@@ -155,6 +155,8 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 	case PIN:
 		tempPending.maxTime = PINGMAXTIME_MS;
 		break;
+	case PEM:
+		tempPending.maxTime = COMMANDMAXTIME_MS;
 	default:
 		tempPending.maxTime = COMMANDMAXTIME_MS;
 		break;
@@ -292,6 +294,11 @@ int main()
 				int command;
 				Player tempPlayer;
 				int idMessage;
+				
+				sf::Vector2i movPos;
+				sf::Packet okMovePack;
+				sf::Packet penMovePack;
+				int indexPlayerOkMove = -1;
 
 				pck >> command;
 				float randomNumber = GetRandomFloat();
@@ -348,8 +355,43 @@ int main()
 
 					case ACK:
 						pck >> idMessage;
+						std::cout << "ID MESSAGE" << idMessage << std::endl;
 						MessageConfirmed(idMessage);
 						break;
+					case MOV:
+						std::cout << "MOVE" << std::endl;
+						pck >> movPos.x;
+						pck >> movPos.y;
+						std::cout << movPos.x << std::endl;
+						pck >> idMessage;
+						if (movPos.x > LEFT_POS && movPos.x < RIGHT_POS) {
+							std::cout << "MOVE ACCEPTED" << std::endl;
+							//ACK_MOVE
+							okMovePack << Commands::OKM;
+							penMovePack << Commands::PEM;
+							indexPlayerOkMove = PlayerIndexByPORT(portRem);
+							if (indexPlayerOkMove != -1) {
+								std::cout << "MOVE PLAYER FOUND" << std::endl;
+								players[indexPlayerOkMove].pos = movPos;
+								okMovePack << players[indexPlayerOkMove].playerID;
+								penMovePack << players[indexPlayerOkMove].playerID;
+								okMovePack << movPos.x;
+								okMovePack << movPos.y;
+								okMovePack << idMessage;
+								penMovePack << movPos.x;
+								penMovePack << movPos.y;
+								sock.send(okMovePack, ipRem, portRem);	//SE MANDA AL JUGADOR QUE SE MUEVE
+								if (players.size() > 1) {
+									for (int h = 0; h < players.size(); h++) {	//SE MANDA AL RESTO
+										if (players[h].port != portRem) {
+											AddMessage(Commands::PEM, penMovePack, players[h].ip, players[h].port);
+										}
+									}
+								}
+								
+							}
+						}
+						
 					}
 				}
 				else {

@@ -137,7 +137,7 @@ void MovementConfirmed(int _ID) {	// SOLO PARA EL CON
 	if (found) { iteratorToDelete++; movementsPending.erase(movementsPending.begin(), iteratorToDelete); }	//HAGO UN iteratorToDelete++ PQ EN UN ERASE NO SE INCLUYE EL SEGUNDO PARÁMETRO. | SEGUNDA OPCIÓN POR SI NO TIRA EL ITERADOR: erase(movementsPending.begin(), movementsPending.begin()+indexToDelete+1);
 }
 
-void MovementDenied(int _ID) {	// SOLO PARA EL CON
+void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 	int indexToDelete = 0;
 	bool found = false;
 	std::vector<PendingMovement>::iterator iteratorToDelete = movementsPending.begin();
@@ -150,7 +150,16 @@ void MovementDenied(int _ID) {	// SOLO PARA EL CON
 		else { indexToDelete++; iteratorToDelete++; }
 	}
 
-	if (found) { movementsPending.erase(iteratorToDelete, movementsPending.end()); iteratorToDelete--; desiredPos = (movementsPending.end()-1)->pos; }	//BORRA TODO LO SIGUIENTE AL DENEGADO Y REINICIA DESIRED POS CON EL ÚLTIMO NO CONFIRMADO AÚN
+	if (found) { 
+		movementsPending.erase(iteratorToDelete, movementsPending.end());
+		//iteratorToDelete--;
+		if(!movementsPending.empty()) desiredPos = (movementsPending.end()-1)->pos;
+		else { desiredPos = players[0].pos; }	//COGE POS PLAYER
+		//std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(_IDPlayer); //PARA PREDICTION
+		//if (tempItPlayerToMove != players.end()) {
+		//	tempItPlayerToMove->pos = desiredPos;
+		//}
+	}	//BORRA TODO LO SIGUIENTE AL DENEGADO Y REINICIA DESIRED POS CON EL ÚLTIMO NO CONFIRMADO AÚN
 }
 
 void DibujaSFML()
@@ -254,7 +263,7 @@ void DibujaSFML()
 						pck >> sPlayer.pos.y;
 						desiredPos = sPlayer.pos;
 						previousDesiredPos = desiredPos;
-						players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector
+						players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector -- IMPORTANTE!!! SI SE CAMBIA ESTO HAY QUE CAMBIAR EL SET DEL DESIRED POS EN EL MOVEMENT DENIDED
 						std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
 						for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
 							std::cout << "other jugador: " << i << std::endl;
@@ -355,7 +364,9 @@ void DibujaSFML()
 					case NOK: {
 						std::cout << "ME MUEVO PENDEJO" << std::endl;
 						int idMov = -1;
+						int idPlayer = -1;
 						int actionToDo = -1;
+						pck >> idPlayer;
 						sf::Vector2i confirmedPos;
 						pck >> confirmedPos.x;
 						pck >> confirmedPos.y;
@@ -363,7 +374,7 @@ void DibujaSFML()
 
 						pck >> idMessage;
 						MessageConfirmed(idMessage);	//CONFIRMO MSG
-						MovementDenied(idMov);			//BORRO EL HISTORIAL A PARTIR DEL DENEGADO
+						MovementDenied(idMov, idPlayer);			//BORRO EL HISTORIAL A PARTIR DEL DENEGADO
 					}
 					case PEM: {
 						std::cout << "SE HA MOVIDO PENDEJO" << std::endl;

@@ -11,6 +11,7 @@
 #define COMMANDMAXTIME_MS 0.5f
 
 #define PERCENT_PACKETLOSS 0.01
+#define TIME_PER_MOVEMENT 0.2f
 
 enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK };
 
@@ -38,7 +39,17 @@ struct PendingMessage {
 	unsigned short port;
 };
 
+struct PendingMovement {
+	sf::Vector2i pos;
+	Player player;
+	int idMov;
+	int idMessage;
+	float time;
+};
+
 std::vector<PendingMessage> messagePending = std::vector<PendingMessage>();
+
+std::vector<PendingMovement> movementsPending = std::vector<PendingMovement>();
 
 std::vector<Player> players = std::vector<Player>();
 
@@ -284,6 +295,58 @@ int main()
 	{
 		if (clock.getElapsedTime().asMilliseconds() > 200)
 		{
+			float movementDeltaTime = clockDeltaTime.getElapsedTime().asSeconds();
+
+			if (movementDeltaTime > TIME_PER_MOVEMENT) {
+				PendingMovement tempMov = movementsPending[0]; //pillar el primero de la lista
+				movementsPending.erase(movementsPending.begin());
+				if (tempMov.pos.x > LEFT_POS && tempMov.pos.x < RIGHT_POS) {
+					sf::Packet okMovePack;
+					sf::Packet penMovePack;
+					std::cout << "MOVE ACCEPTED" << std::endl;
+					//ACK_MOVE
+					okMovePack << Commands::OKM;
+					penMovePack << Commands::PEM;
+					int indexPlayerOkMove;
+					indexPlayerOkMove =  PlayerIndexByPORT(tempMov.player.port);
+					if (indexPlayerOkMove != -1) {
+						std::cout << "MOVE PLAYER FOUND" << std::endl;
+						players[indexPlayerOkMove].pos = tempMov.pos;
+						//packet al que se mueve
+						okMovePack << tempMov.player.playerID;
+						okMovePack << tempMov.pos.x;
+						okMovePack << tempMov.pos.y;
+						okMovePack << tempMov.idMov;
+						okMovePack << tempMov.idMessage;
+						//packet al resto
+						penMovePack << players[indexPlayerOkMove].playerID;
+						penMovePack << tempMov.pos.x;
+						penMovePack << tempMov.pos.y;
+						sock.send(okMovePack, tempMov.player.ip, tempMov.player.port);	//SE MANDA AL JUGADOR QUE SE MUEVE
+						if (players.size() > 1) {
+							for (int h = 0; h < players.size(); h++) {	//SE MANDA AL RESTO
+								if (players[h].port != tempMov.player.port) {
+									AddMessage(Commands::PEM, penMovePack, players[h].ip, players[h].port);
+								}
+							}
+						}
+
+					}
+				}
+				else {	//MOVIMIENTO DENEGADO => MANDAR UN NOK
+					sf::Packet nokPack;
+					nokPack << Commands::NOK;
+					nokPack << tempMov.pos.x;
+					nokPack << tempMov.pos.y;
+					nokPack << tempMov.idMov;
+					nokPack << tempMov.idMessage;
+
+					sock.send(nokPack, tempMov.player.ip, tempMov.player.port);	//SE MANDA AL JUGADOR QUE SE MUEVE
+				}
+
+				clockDeltaTime.restart();
+			}
+
 			sf::Packet pck;
 			sf::IpAddress ipRem; unsigned short portRem;
 			//std::cout << "preReceive------------------------------------------------------------------------" << std::endl;
@@ -294,8 +357,10 @@ int main()
 				int command;
 				Player tempPlayer;
 				int idMessage;
-				
+
+				PendingMovement tempMov;
 				sf::Vector2i movPos;
+				int idMov;
 				sf::Packet okMovePack;
 				sf::Packet penMovePack;
 				int indexPlayerOkMove = -1;
@@ -363,44 +428,19 @@ int main()
 						pck >> movPos.x;
 						pck >> movPos.y;
 						std::cout << movPos.x << std::endl;
+						pck >> idMov;
 						pck >> idMessage;
-						if (movPos.x > LEFT_POS && movPos.x < RIGHT_POS) {
-							std::cout << "MOVE ACCEPTED" << std::endl;
-							//ACK_MOVE
-							okMovePack << Commands::OKM;
-							penMovePack << Commands::PEM;
-							indexPlayerOkMove = PlayerIndexByPORT(portRem);
-							if (indexPlayerOkMove != -1) {
-								std::cout << "MOVE PLAYER FOUND" << std::endl;
-								players[indexPlayerOkMove].pos = movPos;
-								okMovePack << players[indexPlayerOkMove].playerID;
-								penMovePack << players[indexPlayerOkMove].playerID;
-								okMovePack << movPos.x;
-								okMovePack << movPos.y;
-								okMovePack << idMessage;
-								penMovePack << movPos.x;
-								penMovePack << movPos.y;
-								sock.send(okMovePack, ipRem, portRem);	//SE MANDA AL JUGADOR QUE SE MUEVE
-								if (players.size() > 1) {
-									for (int h = 0; h < players.size(); h++) {	//SE MANDA AL RESTO
-										if (players[h].port != portRem) {
-											AddMessage(Commands::PEM, penMovePack, players[h].ip, players[h].port);
-										}
-									}
-								}
-								
-							}
-						}
-						else {	//MOVIMIENTO DENEGADO => MANDAR UN NOK
-							
-						}
-						
+
+						tempMov.pos = movPos;
+						tempMov.player = players[PlayerIndexByPORT(portRem)];
+						tempMov.idMov = idMov;
+						tempMov.idMessage = idMov;
+						movementsPending.push_back(tempMov);
 					}
 				}
 				else {
 					std::cout << "Se ha ignorado el mensaje con comando " << command << " (Roll: " << randomNumber << ")" << std::endl;
 				}
-
 				/*
 				int pos;
 				pck >> pos;

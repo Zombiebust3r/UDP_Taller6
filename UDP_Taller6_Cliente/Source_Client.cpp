@@ -7,13 +7,17 @@
 #define PORT_SERVER 50000
 
 #define PERCENT_PACKETLOSS 0.01
+#define TIME_PER_MOVEMENT 0.01f
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK };
 
 int pos;
 sf::UdpSocket sock;
 int actualID = 0;
+int movementID = 0;
+bool firstReset = true;
 sf::Vector2i desiredPos = sf::Vector2i(0, 0);
+sf::Vector2i previousDesiredPos = sf::Vector2i(0, 0);
 
 struct Player
 {
@@ -28,12 +32,20 @@ struct PendingMessage {
 	float time;
 };
 
+struct PendingMovement {
+	sf::Vector2i pos;
+	int id;
+	float time;
+};
+
 std::vector<Player> players = std::vector<Player>();
 
 //HACER UN SISTEMA PARA ENVIO HASTA CONFIRMACIÓN:
 	//UNA FUNCIÓN QUE SE LLAME EN EL RECEIVE QUE ELIMINE EL MENSAJE CONFIRMADO DE LA LISTA DE PENDIENTES. SE EJECUTA ANTES DEL ENVIO PARA NO ENVIAR ALGO YA CONFIRMADO.
 	//UNA FUNCIÓN QUE PASE POR UN VECTOR DE MESNAJES (ID, MSG, TIEMPO [se añade dt cada frame]) <int, packet, int(milisegundos)> Y LOS ENVIE CADA 500ms.
 std::vector<PendingMessage> messagePending = std::vector<PendingMessage>();
+
+std::vector<PendingMovement> movementsPending = std::vector<PendingMovement>();
 
 std::vector<Player>::iterator PlayerItIndexByID(int _id) {
 	std::vector<Player>::iterator it = players.begin();
@@ -109,11 +121,44 @@ void MessageConfirmed(int _ID) {	// SOLO PARA EL CON
 	if (found) { messagePending.erase(iteratorToDelete); }
 }
 
+void MovementConfirmed(int _ID) {	// SOLO PARA EL CON
+	int indexToDelete = 0;
+	bool found = false;
+	std::vector<PendingMovement>::iterator iteratorToDelete = movementsPending.begin();
+
+	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
+		if (iteratorToDelete->id == _ID) {
+			//FOUND MY MESSAGE TO DELETE
+			found = true;
+		}
+		else { indexToDelete++; iteratorToDelete++; }
+	}
+
+	if (found) { iteratorToDelete++; movementsPending.erase(movementsPending.begin(), iteratorToDelete); }	//HAGO UN iteratorToDelete++ PQ EN UN ERASE NO SE INCLUYE EL SEGUNDO PARÁMETRO. | SEGUNDA OPCIÓN POR SI NO TIRA EL ITERADOR: erase(movementsPending.begin(), movementsPending.begin()+indexToDelete+1);
+}
+
+void MovementDenied(int _ID) {	// SOLO PARA EL CON
+	int indexToDelete = 0;
+	bool found = false;
+	std::vector<PendingMovement>::iterator iteratorToDelete = movementsPending.begin();
+
+	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
+		if (iteratorToDelete->id == _ID) {
+			//FOUND MY MESSAGE TO DELETE
+			found = true;
+		}
+		else { indexToDelete++; iteratorToDelete++; }
+	}
+
+	if (found) { movementsPending.erase(iteratorToDelete, movementsPending.end()); iteratorToDelete--; desiredPos = (movementsPending.end()-1)->pos; }	//BORRA TODO LO SIGUIENTE AL DENEGADO Y REINICIA DESIRED POS CON EL ÚLTIMO NO CONFIRMADO AÚN
+}
+
 void DibujaSFML()
 {
 	sf::RenderWindow window(sf::VideoMode(800, 600), "Sin acumulación en cliente");
 	
 	//INICIAR CHRONO PARA DELTATIME ----------------------------------------------
+	sf::Clock chronoMovementDelta;
 	sf::Clock chronoDeltaTime;
 
 	while (window.isOpen())
@@ -130,24 +175,24 @@ void DibujaSFML()
 			case sf::Event::KeyPressed:
 				if (event.key.code == sf::Keyboard::Left)
 				{
-					sf::Packet pckLeft;
-					pckLeft << Commands::MOV;
+					//sf::Packet pckLeft;
+					//pckLeft << Commands::MOV;
 					desiredPos.x--;
-					pckLeft << desiredPos.x;
-					pckLeft << desiredPos.y;
-					AddMessage(pckLeft);
+					//pckLeft << desiredPos.x;
+					//pckLeft << desiredPos.y;
+					//AddMessage(pckLeft);
 					std::cout << "MOVE LEFT" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
 				}
 				else if (event.key.code == sf::Keyboard::Right)
 				{
-					sf::Packet pckRight;
-					pckRight << Commands::MOV;
+					//sf::Packet pckRight;
+					//pckRight << Commands::MOV;
 					desiredPos.x++;
-					pckRight << desiredPos.x;
-					pckRight << desiredPos.y;
-					AddMessage(pckRight);
+					//pckRight << desiredPos.x;
+					//pckRight << desiredPos.y;
+					//AddMessage(pckRight);
 					std::cout << "MOVE RIGHT" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 				}
@@ -158,7 +203,29 @@ void DibujaSFML()
 
 			}
 		}
-		
+		if (firstReset) { chronoMovementDelta.restart(); firstReset = false; }
+		float movementDeltaTime = chronoMovementDelta.getElapsedTime().asSeconds();
+
+		if (movementDeltaTime > TIME_PER_MOVEMENT) {
+			if (desiredPos.x != previousDesiredPos.x && desiredPos.y != previousDesiredPos.y) {
+				std::cout << "TIME" << std::endl;
+				PendingMovement tempMov;
+				tempMov.id = movementID;
+				movementID++;
+				tempMov.pos = desiredPos;
+				previousDesiredPos = desiredPos;
+				tempMov.time = movementDeltaTime;
+				movementsPending.push_back(tempMov);
+				sf::Packet pckMovement;
+				pckMovement << Commands::MOV;
+				pckMovement << desiredPos.x;
+				pckMovement << desiredPos.y;
+				pckMovement << tempMov.id;
+				AddMessage(pckMovement);
+			}
+			chronoMovementDelta.restart();
+		}
+
 		sf::Packet pck;
 		sf::IpAddress ipRem;
 		unsigned short portRem;
@@ -186,6 +253,7 @@ void DibujaSFML()
 						pck >> sPlayer.pos.x;
 						pck >> sPlayer.pos.y;
 						desiredPos = sPlayer.pos;
+						previousDesiredPos = desiredPos;
 						players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector
 						std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
 						for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
@@ -268,17 +336,34 @@ void DibujaSFML()
 					case OKM: {
 						std::cout << "ME MUEVO PENDEJO" << std::endl;
 						int tempIDPlayer = -1;
+						int idMov = -1;
+						int actionToDo = -1;
 						pck >> tempIDPlayer;
 						sf::Vector2i confirmedPos;
 						pck >> confirmedPos.x;
 						pck >> confirmedPos.y;
+						pck >> idMov;
 						std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(tempIDPlayer);
 						if (tempItPlayerToMove != players.end()) {
 							tempItPlayerToMove->pos = confirmedPos;
 						}
 
 						pck >> idMessage;
-						MessageConfirmed(idMessage);
+						MessageConfirmed(idMessage);	//CONFIRMO MSG
+						MovementConfirmed(idMov);		//CONFIRMO EL MOVIMIENTO Y BORRO TODO LO ANTERIOR. SI RECIBO UN OKM PARA UN MOVIMIENTO YA BORRADO POR UNA CONFIRMACIÓN ANTERIOR NO HARÁ CASO PQ NO ENCONTRARÁ LO QUE BUSCA EN EL VECTOR PERO SI EL MSG.
+					}
+					case NOK: {
+						std::cout << "ME MUEVO PENDEJO" << std::endl;
+						int idMov = -1;
+						int actionToDo = -1;
+						sf::Vector2i confirmedPos;
+						pck >> confirmedPos.x;
+						pck >> confirmedPos.y;
+						pck >> idMov;
+
+						pck >> idMessage;
+						MessageConfirmed(idMessage);	//CONFIRMO MSG
+						MovementDenied(idMov);			//BORRO EL HISTORIAL A PARTIR DEL DENEGADO
 					}
 					case PEM: {
 						std::cout << "SE HA MOVIDO PENDEJO" << std::endl;

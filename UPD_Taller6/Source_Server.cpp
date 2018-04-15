@@ -12,7 +12,7 @@
 
 #define PERCENT_PACKETLOSS 0.01
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK };
 
 int playerID = 1; //se irá sumando 1 cada jugador nuevo
 int actualID = 0;
@@ -390,6 +390,9 @@ int main()
 								}
 								
 							}
+						}
+						else {	//MOVIMIENTO DENEGADO => MANDAR UN NOK
+							
 						}
 						
 					}

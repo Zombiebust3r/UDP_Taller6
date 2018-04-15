@@ -68,7 +68,6 @@ sf::Vector2i RandoPosGenerator() {
 
 void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsigned short _port);	//PREDEFINE
 
-
 Player MakePlayer(sf::IpAddress ipRem, short portRem) {
 
 	Player tempPlayer;
@@ -291,60 +290,60 @@ int main()
 	}
 	sf::Clock clock;
 	sf::Clock clockDeltaTime;
+	sf::Clock clockMovTime;
 	do
 	{
 		if (clock.getElapsedTime().asMilliseconds() > 200)
 		{
-			float movementDeltaTime = clockDeltaTime.getElapsedTime().asSeconds();
-
-			if (movementDeltaTime > TIME_PER_MOVEMENT) {
-				PendingMovement tempMov = movementsPending[0]; //pillar el primero de la lista
-				movementsPending.erase(movementsPending.begin());
-				if (tempMov.pos.x > LEFT_POS && tempMov.pos.x < RIGHT_POS) {
-					sf::Packet okMovePack;
-					sf::Packet penMovePack;
-					std::cout << "MOVE ACCEPTED" << std::endl;
-					//ACK_MOVE
-					okMovePack << Commands::OKM;
-					penMovePack << Commands::PEM;
-					int indexPlayerOkMove;
-					indexPlayerOkMove =  PlayerIndexByPORT(tempMov.player.port);
-					if (indexPlayerOkMove != -1) {
-						std::cout << "MOVE PLAYER FOUND" << std::endl;
-						players[indexPlayerOkMove].pos = tempMov.pos;
-						//packet al que se mueve
-						okMovePack << tempMov.player.playerID;
-						okMovePack << tempMov.pos.x;
-						okMovePack << tempMov.pos.y;
-						okMovePack << tempMov.idMov;
-						okMovePack << tempMov.idMessage;
-						//packet al resto
-						penMovePack << players[indexPlayerOkMove].playerID;
-						penMovePack << tempMov.pos.x;
-						penMovePack << tempMov.pos.y;
-						sock.send(okMovePack, tempMov.player.ip, tempMov.player.port);	//SE MANDA AL JUGADOR QUE SE MUEVE
-						if (players.size() > 1) {
-							for (int h = 0; h < players.size(); h++) {	//SE MANDA AL RESTO
-								if (players[h].port != tempMov.player.port) {
-									AddMessage(Commands::PEM, penMovePack, players[h].ip, players[h].port);
+			float movementDeltaTime = clockMovTime.getElapsedTime().asSeconds();
+			if (movementDeltaTime > TIME_PER_MOVEMENT && movementsPending.size() > 0) {
+				for (int i = 0; i < movementsPending.size(); i++) {
+					PendingMovement tempMov = movementsPending[i]; //pillar el primero de la lista
+					if (tempMov.pos.x > LEFT_POS && tempMov.pos.x < RIGHT_POS) {
+						sf::Packet okMovePack;
+						sf::Packet penMovePack;
+						std::cout << "MOVE ACCEPTED" << std::endl;
+						//ACK_MOVE
+						okMovePack << Commands::OKM;
+						penMovePack << Commands::PEM;
+						int indexPlayerOkMove;
+						indexPlayerOkMove = PlayerIndexByPORT(tempMov.player.port);
+						if (indexPlayerOkMove != -1) {
+							std::cout << "MOVE PLAYER FOUND" << std::endl;
+							players[indexPlayerOkMove].pos = tempMov.pos;
+							//packet al que se mueve
+							okMovePack << tempMov.player.playerID;
+							okMovePack << tempMov.pos.x;
+							okMovePack << tempMov.pos.y;
+							okMovePack << tempMov.idMov;
+							okMovePack << tempMov.idMessage;
+							//packet al resto
+							penMovePack << players[indexPlayerOkMove].playerID;
+							penMovePack << tempMov.pos.x;
+							penMovePack << tempMov.pos.y;
+							sock.send(okMovePack, tempMov.player.ip, tempMov.player.port);	//SE MANDA AL JUGADOR QUE SE MUEVE
+							if (players.size() > 1) {
+								for (int h = 0; h < players.size(); h++) {	//SE MANDA AL RESTO
+									if (players[h].port != tempMov.player.port) {
+										AddMessage(Commands::PEM, penMovePack, players[h].ip, players[h].port);
+									}
 								}
 							}
 						}
-
+					}
+					else {	//MOVIMIENTO DENEGADO => MANDAR UN NOK
+						std::cout << "envio denied" << std::endl;
+						sf::Packet nokPack;
+						nokPack << Commands::NOK;
+						nokPack << tempMov.pos.x;
+						nokPack << tempMov.pos.y;
+						nokPack << tempMov.idMov;
+						nokPack << tempMov.idMessage;
+						sock.send(nokPack, tempMov.player.ip, tempMov.player.port);	//SE MANDA AL JUGADOR QUE SE MUEVE
 					}
 				}
-				else {	//MOVIMIENTO DENEGADO => MANDAR UN NOK
-					sf::Packet nokPack;
-					nokPack << Commands::NOK;
-					nokPack << tempMov.pos.x;
-					nokPack << tempMov.pos.y;
-					nokPack << tempMov.idMov;
-					nokPack << tempMov.idMessage;
-
-					sock.send(nokPack, tempMov.player.ip, tempMov.player.port);	//SE MANDA AL JUGADOR QUE SE MUEVE
-				}
-
-				clockDeltaTime.restart();
+				std::vector<PendingMovement>().swap(movementsPending);
+				clockMovTime.restart();
 			}
 
 			sf::Packet pck;
@@ -424,18 +423,32 @@ int main()
 						MessageConfirmed(idMessage);
 						break;
 					case MOV:
-						std::cout << "MOVE" << std::endl;
+						std::cout << "RECEIVED MOVE" << std::endl;
 						pck >> movPos.x;
 						pck >> movPos.y;
 						std::cout << movPos.x << std::endl;
 						pck >> idMov;
 						pck >> idMessage;
-
-						tempMov.pos = movPos;
-						tempMov.player = players[PlayerIndexByPORT(portRem)];
-						tempMov.idMov = idMov;
-						tempMov.idMessage = idMov;
-						movementsPending.push_back(tempMov);
+						int tempPlayerid = players[PlayerIndexByPORT(portRem)].playerID;
+						//comprobar que no sea uno ya enviado
+						bool found = false;
+						if (movementsPending.size() > 0) {
+							int it = 0;
+							while (it < movementsPending.size() && !found) {
+								if (movementsPending[it].idMessage == idMessage && movementsPending[it].player.playerID == tempPlayerid) {
+									found = true;
+									std::cout << "copied" << std::endl;
+								}
+								it++;
+							}
+						}
+						if (!found) {
+							tempMov.pos = movPos;
+							tempMov.player = players[PlayerIndexByPORT(portRem)];
+							tempMov.idMov = idMov;
+							tempMov.idMessage = idMessage;
+							movementsPending.push_back(tempMov);
+						}
 					}
 				}
 				else {

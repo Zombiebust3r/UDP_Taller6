@@ -186,7 +186,7 @@ void DibujaSFML()
 				{
 					//sf::Packet pckLeft;
 					//pckLeft << Commands::MOV;
-					desiredPos.x--;
+					desiredPos.x -= 10;
 					//pckLeft << desiredPos.x;
 					//pckLeft << desiredPos.y;
 					//AddMessage(pckLeft);
@@ -198,7 +198,7 @@ void DibujaSFML()
 				{
 					//sf::Packet pckRight;
 					//pckRight << Commands::MOV;
-					desiredPos.x++;
+					desiredPos.x += 10;
 					//pckRight << desiredPos.x;
 					//pckRight << desiredPos.y;
 					//AddMessage(pckRight);
@@ -216,7 +216,7 @@ void DibujaSFML()
 		float movementDeltaTime = chronoMovementDelta.getElapsedTime().asSeconds();
 
 		if (movementDeltaTime > TIME_PER_MOVEMENT) {
-			if (desiredPos.x != previousDesiredPos.x && desiredPos.y != previousDesiredPos.y) {
+			if (desiredPos.x != previousDesiredPos.x || desiredPos.y != previousDesiredPos.y) {
 				std::cout << "TIME" << std::endl;
 				PendingMovement tempMov;
 				tempMov.id = movementID;
@@ -341,9 +341,10 @@ void DibujaSFML()
 						std::cout << "Te han desconectado" << std::endl;
 						system("pause");
 						window.close();
+						break;
 					}
 					case OKM: {
-						std::cout << "ME MUEVO PENDEJO" << std::endl;
+						std::cout << "ok mov" << std::endl;
 						int tempIDPlayer = -1;
 						int idMov = -1;
 						int actionToDo = -1;
@@ -360,9 +361,10 @@ void DibujaSFML()
 						pck >> idMessage;
 						MessageConfirmed(idMessage);	//CONFIRMO MSG
 						MovementConfirmed(idMov);		//CONFIRMO EL MOVIMIENTO Y BORRO TODO LO ANTERIOR. SI RECIBO UN OKM PARA UN MOVIMIENTO YA BORRADO POR UNA CONFIRMACIÓN ANTERIOR NO HARÁ CASO PQ NO ENCONTRARÁ LO QUE BUSCA EN EL VECTOR PERO SI EL MSG.
+						break;
 					}
 					case NOK: {
-						std::cout << "ME MUEVO PENDEJO" << std::endl;
+						std::cout << "movement denied" << std::endl;
 						int idMov = -1;
 						int idPlayer = -1;
 						int actionToDo = -1;
@@ -373,11 +375,11 @@ void DibujaSFML()
 						pck >> idMov;
 
 						pck >> idMessage;
-						MessageConfirmed(idMessage);	//CONFIRMO MSG
+						MessageConfirmed(idMessage);				//CONFIRMO MSG
 						MovementDenied(idMov, idPlayer);			//BORRO EL HISTORIAL A PARTIR DEL DENEGADO
+						break;
 					}
 					case PEM: {
-						std::cout << "SE HA MOVIDO PENDEJO" << std::endl;
 						int tempIDPlayer = -1;
 						pck >> tempIDPlayer;
 						sf::Vector2i confirmedPos;
@@ -393,6 +395,7 @@ void DibujaSFML()
 						pckAck << Commands::ACK;
 						pckAck << idMessage;
 						sock.send(pckAck, IP_SERVER, PORT_SERVER);
+						break;
 					}
 				} //esto esta bien tabulado
 			}

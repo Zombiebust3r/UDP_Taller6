@@ -126,7 +126,7 @@ void MovementConfirmed(int _ID) {	// SOLO PARA EL CON
 	bool found = false;
 	std::vector<PendingMovement>::iterator iteratorToDelete = movementsPending.begin();
 
-	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
+	while (!found && (indexToDelete < movementsPending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
 		if (iteratorToDelete->id == _ID) {
 			//FOUND MY MESSAGE TO DELETE
 			found = true;
@@ -134,7 +134,8 @@ void MovementConfirmed(int _ID) {	// SOLO PARA EL CON
 		else { indexToDelete++; iteratorToDelete++; }
 	}
 
-	if (found) { iteratorToDelete++; movementsPending.erase(movementsPending.begin(), iteratorToDelete); }	//HAGO UN iteratorToDelete++ PQ EN UN ERASE NO SE INCLUYE EL SEGUNDO PARÁMETRO. | SEGUNDA OPCIÓN POR SI NO TIRA EL ITERADOR: erase(movementsPending.begin(), movementsPending.begin()+indexToDelete+1);
+	if (found) { iteratorToDelete++; movementsPending.erase(movementsPending.begin(), iteratorToDelete); }	
+	//HAGO UN iteratorToDelete++ PQ EN UN ERASE NO SE INCLUYE EL SEGUNDO PARÁMETRO. | SEGUNDA OPCIÓN POR SI NO TIRA EL ITERADOR: erase(movementsPending.begin(), movementsPending.begin()+indexToDelete+1);
 }
 
 void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
@@ -142,19 +143,18 @@ void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 	bool found = false;
 	std::vector<PendingMovement>::iterator iteratorToDelete = movementsPending.begin();
 
-	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
+	while (!found && (indexToDelete < movementsPending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
 		if (iteratorToDelete->id == _ID) {
 			//FOUND MY MESSAGE TO DELETE
 			found = true;
 		}
 		else { indexToDelete++; iteratorToDelete++; }
 	}
-
 	if (found) { 
 		movementsPending.erase(iteratorToDelete, movementsPending.end());
-		//iteratorToDelete--;
 		if(!movementsPending.empty()) desiredPos = (movementsPending.end()-1)->pos;
 		else { desiredPos = players[0].pos; }	//COGE POS PLAYER
+		previousDesiredPos = desiredPos;
 		//std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(_IDPlayer); //PARA PREDICTION
 		//if (tempItPlayerToMove != players.end()) {
 		//	tempItPlayerToMove->pos = desiredPos;
@@ -184,25 +184,28 @@ void DibujaSFML()
 			case sf::Event::KeyPressed:
 				if (event.key.code == sf::Keyboard::Left)
 				{
-					//sf::Packet pckLeft;
-					//pckLeft << Commands::MOV;
-					desiredPos.x -= 10;
-					//pckLeft << desiredPos.x;
-					//pckLeft << desiredPos.y;
-					//AddMessage(pckLeft);
+					desiredPos.x -= 1;
 					std::cout << "MOVE LEFT" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
 				}
 				else if (event.key.code == sf::Keyboard::Right)
 				{
-					//sf::Packet pckRight;
-					//pckRight << Commands::MOV;
-					desiredPos.x += 10;
-					//pckRight << desiredPos.x;
-					//pckRight << desiredPos.y;
-					//AddMessage(pckRight);
+					desiredPos.x += 1;
 					std::cout << "MOVE RIGHT" << std::endl;
+					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
+				}
+				else if (event.key.code == sf::Keyboard::Up)
+				{
+					desiredPos.y -= 1;
+					std::cout << "MOVE UP" << std::endl;
+					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
+
+				}
+				else if (event.key.code == sf::Keyboard::Down)
+				{
+					desiredPos.y += 1;
+					std::cout << "MOVE DOWN" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 				}
 				break;
@@ -217,7 +220,6 @@ void DibujaSFML()
 
 		if (movementDeltaTime > TIME_PER_MOVEMENT) {
 			if (desiredPos.x != previousDesiredPos.x || desiredPos.y != previousDesiredPos.y) {
-				std::cout << "TIME" << std::endl;
 				PendingMovement tempMov;
 				tempMov.id = movementID;
 				movementID++;
@@ -373,7 +375,6 @@ void DibujaSFML()
 						pck >> confirmedPos.x;
 						pck >> confirmedPos.y;
 						pck >> idMov;
-
 						pck >> idMessage;
 						MessageConfirmed(idMessage);				//CONFIRMO MSG
 						MovementDenied(idMov, idPlayer);			//BORRO EL HISTORIAL A PARTIR DEL DENEGADO
@@ -390,7 +391,6 @@ void DibujaSFML()
 							tempItPlayerToMove->pos = confirmedPos;
 						}
 						pck >> idMessage;
-						std::cout << "ID MESSAGE" << idMessage << std::endl;
 						sf::Packet pckAck;
 						pckAck << Commands::ACK;
 						pckAck << idMessage;
@@ -422,9 +422,9 @@ void DibujaSFML()
 
 		//For para cada jugador -> rectAvatar(players[i].pos) | rectAvatar(sf::Vector2f(players[i].pos.x, players[i].pos.y))
 		for (auto p : players) {
-			sf::RectangleShape rectAvatar(sf::Vector2f(60, 60));
+			sf::RectangleShape rectAvatar(sf::Vector2f(40, 40));
 			rectAvatar.setFillColor(p.pjColor);
-			rectAvatar.setPosition(sf::Vector2f(p.pos.x, p.pos.y));
+			rectAvatar.setPosition(sf::Vector2f(200 + p.pos.x*40, p.pos.y*40));
 			window.draw(rectAvatar);
 		}
 		

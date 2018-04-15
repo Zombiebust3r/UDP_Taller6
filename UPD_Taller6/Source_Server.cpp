@@ -5,6 +5,8 @@
 
 #define RIGHT_POS 600
 #define LEFT_POS 200
+#define RIGHT_CELL 10
+#define LEFT_CELL 0
 
 #define MAXPINTTRIES 3
 #define PINGMAXTIME_MS 5.0f
@@ -61,8 +63,8 @@ float GetRandomFloat() {
 }
 sf::Vector2i RandoPosGenerator() {
 	sf::Vector2i temp;
-	temp.x = (rand() % 401) + 200; //entre 200 y 600
-	temp.y = (rand() % 401) + 200; //random lel
+	temp.x = (rand() % 10) + 0; //entre 0 y 10
+	temp.y = (rand() % 10) + 0; //random lel
 	return temp;
 }
 
@@ -299,7 +301,7 @@ int main()
 			if (movementDeltaTime > TIME_PER_MOVEMENT && movementsPending.size() > 0) {
 				for (int i = 0; i < movementsPending.size(); i++) {
 					PendingMovement tempMov = movementsPending[i]; //pillar el primero de la lista
-					if (tempMov.pos.x > LEFT_POS && tempMov.pos.x < RIGHT_POS) {
+					if (tempMov.pos.x >= LEFT_CELL && tempMov.pos.x < RIGHT_CELL) {
 						sf::Packet okMovePack;
 						sf::Packet penMovePack;
 						std::cout << "MOVE ACCEPTED" << std::endl;
@@ -335,6 +337,7 @@ int main()
 						std::cout << "envio denied" << std::endl;
 						sf::Packet nokPack;
 						nokPack << Commands::NOK;
+						nokPack << tempMov.player.playerID;
 						nokPack << tempMov.pos.x;
 						nokPack << tempMov.pos.y;
 						nokPack << tempMov.idMov;
@@ -428,6 +431,7 @@ int main()
 						pck >> movPos.y;
 						std::cout << movPos.x << std::endl;
 						pck >> idMov;
+						std::cout << "IDMOV" << idMov << std::endl;
 						pck >> idMessage;
 						int tempPlayerid = players[PlayerIndexByPORT(portRem)].playerID;
 						//comprobar que no sea uno ya enviado

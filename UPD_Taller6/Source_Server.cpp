@@ -1,5 +1,6 @@
 #include <SFML\Network.hpp>
 #include <SFML/Graphics.hpp>
+#include <lib.h>
 #include <iostream>
 #include <random>
 

@@ -1,6 +1,8 @@
 ﻿  Source_Client.cpp
-Source_Client.cpp(73): warning C4244: 'argumento': conversión de 'int' a 'float'; posible pérdida de datos
+Source_Client.cpp(428): warning C4244: 'argumento': conversión de 'int' a 'float'; posible pérdida de datos
   Generando código
-  All 18 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  13 of 341 functions ( 3.8%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    10 functions had inline decision re-evaluated but remain unchanged
   Generación de código finalizada
-  UDP_Taller6_Cliente.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Release\UDP_Taller6_Cliente.exe
+  UDP_Taller6_Cliente.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Release\UDP_Taller6_Cliente.exe

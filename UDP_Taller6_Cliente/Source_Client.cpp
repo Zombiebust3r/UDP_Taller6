@@ -19,10 +19,12 @@ int movementID = 0;
 bool firstReset = true;
 sf::Vector2i desiredPos = sf::Vector2i(0, 0);
 sf::Vector2i previousDesiredPos = sf::Vector2i(0, 0);
+int timeAnimation = 50;
 
 struct Player
 {
-	sf::Vector2i pos;
+	sf::Vector2i cellPos;
+	sf::Vector2i pixelPos; //usaremos este para la interpolacion y prediccion
 	int playerID;
 	sf::Color pjColor;
 };
@@ -154,7 +156,7 @@ void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 	if (found) { 
 		movementsPending.erase(iteratorToDelete, movementsPending.end());
 		if(!movementsPending.empty()) desiredPos = (movementsPending.end()-1)->pos;
-		else { desiredPos = players[0].pos; }	//COGE POS PLAYER
+		else { desiredPos = players[0].cellPos; players[0].pixelPos = players[0].cellPos * 40; }	//COGE POS PLAYER
 		previousDesiredPos = desiredPos;
 		//std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(_IDPlayer); //PARA PREDICTION
 		//if (tempItPlayerToMove != players.end()) {
@@ -163,6 +165,39 @@ void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 	}	//BORRA TODO LO SIGUIENTE AL DENEGADO Y REINICIA DESIRED POS CON EL ÚLTIMO NO CONFIRMADO AÚN
 }
 
+void PredictionFunc(sf::Vector2i curCellPos, sf::Vector2i desiredCellPos, int timeAnim) {
+	sf::Vector2i distanceToTravel = desiredCellPos - curCellPos;
+	distanceToTravel *= 40; //cell to pixel
+	bool changeCellPos = false;
+	if (distanceToTravel.x != 0) { //cambiar posicion si eso
+		distanceToTravel.x /= timeAnim;
+		players[0].pixelPos += distanceToTravel;
+
+		if (distanceToTravel.x < 0 && players[0].pixelPos.x < desiredCellPos.x * 40) {
+			changeCellPos = true;
+		}
+		else if (distanceToTravel.x > 0 && players[0].pixelPos.x > desiredCellPos.x * 40) {
+			changeCellPos = true;
+		}
+	}
+	else if (distanceToTravel.y != 0) {
+		distanceToTravel.y /= timeAnim;
+		players[0].pixelPos += distanceToTravel;
+
+		if (distanceToTravel.y < 0 && players[0].pixelPos.y < desiredCellPos.y * 40) {
+			changeCellPos = true;
+		}
+		else if (distanceToTravel.y > 0 && players[0].pixelPos.y > desiredCellPos.y * 40) {
+			changeCellPos = true;
+		}
+	}
+	if (changeCellPos) {
+		players[0].cellPos = desiredCellPos;
+		players[0].pixelPos = desiredCellPos * 40; //reajustar
+	}
+		
+	
+}
 void DibujaSFML()
 {
 	sf::RenderWindow window(sf::VideoMode(800, 600), "Sin acumulación en cliente");
@@ -170,7 +205,7 @@ void DibujaSFML()
 	//INICIAR CHRONO PARA DELTATIME ----------------------------------------------
 	sf::Clock chronoMovementDelta;
 	sf::Clock chronoDeltaTime;
-
+	sf::Clock chronoAnimationTime;
 	while (window.isOpen())
 	{
 		sf::Event event;
@@ -262,10 +297,11 @@ void DibujaSFML()
 						pck >> sPlayer.pjColor.r;
 						pck >> sPlayer.pjColor.g;
 						pck >> sPlayer.pjColor.b;
-						pck >> sPlayer.pos.x;
-						pck >> sPlayer.pos.y;
-						desiredPos = sPlayer.pos;
+						pck >> sPlayer.cellPos.x;
+						pck >> sPlayer.cellPos.y;
+						desiredPos = sPlayer.cellPos;
 						previousDesiredPos = desiredPos;
+						sPlayer.pixelPos = sPlayer.cellPos * 40;
 						players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector -- IMPORTANTE!!! SI SE CAMBIA ESTO HAY QUE CAMBIAR EL SET DEL DESIRED POS EN EL MOVEMENT DENIDED
 						std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
 						for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
@@ -275,8 +311,9 @@ void DibujaSFML()
 							pck >> tempPlayer.pjColor.r;
 							pck >> tempPlayer.pjColor.g;
 							pck >> tempPlayer.pjColor.b;
-							pck >> tempPlayer.pos.x;
-							pck >> tempPlayer.pos.y;
+							pck >> tempPlayer.cellPos.x;
+							pck >> tempPlayer.cellPos.y;
+							tempPlayer.pixelPos = tempPlayer.cellPos * 40;
 							players.push_back(tempPlayer);
 						}
 						pck >> idMessage;
@@ -291,8 +328,9 @@ void DibujaSFML()
 						pck >> tempPlayer.pjColor.r;
 						pck >> tempPlayer.pjColor.g;
 						pck >> tempPlayer.pjColor.b;
-						pck >> tempPlayer.pos.x;
-						pck >> tempPlayer.pos.y;
+						pck >> tempPlayer.cellPos.x;
+						pck >> tempPlayer.cellPos.y;
+						tempPlayer.pixelPos = tempPlayer.cellPos * 40;
 
 						std::cout << "recibo un nuevo jugador id: " << tempPlayer.playerID << std::endl;
 						//revisar si ya tengo a este jugador i guess
@@ -358,7 +396,8 @@ void DibujaSFML()
 						pck >> idMov;
 						std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(tempIDPlayer);
 						if (tempItPlayerToMove != players.end()) {
-							tempItPlayerToMove->pos = confirmedPos;
+							//tempItPlayerToMove->cellPos = confirmedPos;
+							//tempItPlayerToMove->pixelPos = tempItPlayerToMove->cellPos * 40;
 						}
 
 						pck >> idMessage;
@@ -389,7 +428,8 @@ void DibujaSFML()
 						pck >> confirmedPos.y;
 						std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(tempIDPlayer);
 						if (tempItPlayerToMove != players.end()) {
-							tempItPlayerToMove->pos = confirmedPos;
+							tempItPlayerToMove->cellPos = confirmedPos;
+							tempItPlayerToMove->pixelPos = tempItPlayerToMove->cellPos * 40;
 						}
 						pck >> idMessage;
 						sf::Packet pckAck;
@@ -411,7 +451,14 @@ void DibujaSFML()
 		SendMessages(time);
 		//std::cout << chronoDeltaTime.getElapsedTime().asMilliseconds() << std::endl;
 		//chronoDeltaTime.restart().asMilliseconds();
-
+		if (players.size() > 0) {
+			//funcion que a partir de decide el smooth del prediction a partir del tiempo que queremos que dure la animacion
+			int curTime = chronoAnimationTime.getElapsedTime().asMilliseconds();
+			if (curTime > timeAnimation / 10) { //10 es el numero de movimientos antes de llegar al destino
+				PredictionFunc(players[0].cellPos, desiredPos, timeAnimation / 10);
+				chronoAnimationTime.restart();
+			}
+		}
 		window.clear();
 
 		sf::RectangleShape rectBlanco(sf::Vector2f(1, 600));
@@ -425,7 +472,7 @@ void DibujaSFML()
 		for (auto p : players) {
 			sf::RectangleShape rectAvatar(sf::Vector2f(40, 40));
 			rectAvatar.setFillColor(p.pjColor);
-			rectAvatar.setPosition(sf::Vector2f(200 + p.pos.x*40, p.pos.y*40));
+			rectAvatar.setPosition(sf::Vector2f(200 + p.pixelPos.x, p.pixelPos.y));
 			window.draw(rectAvatar);
 		}
 		

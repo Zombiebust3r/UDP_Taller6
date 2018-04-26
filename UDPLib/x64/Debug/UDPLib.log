@@ -1,3 +1,1 @@
-﻿  lib.cpp
-e:\yosm\documents\uni\3r\3r2sem\redes\bloc2\udp_taller6\udplib\lib.cpp(3): warning C4067: símbolos (token) inesperados después de la directiva del preprocesador; se esperaba una nueva línea
-  UDPLib.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Debug\UDPLib.lib
+﻿  UDPLib.vcxproj -> C:\Users\dpeco\Documents\GitHub\UDP_Taller6\x64\Debug\UDPLib.lib

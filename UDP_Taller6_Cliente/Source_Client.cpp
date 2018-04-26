@@ -8,7 +8,7 @@
 #define PORT_SERVER 50000
 
 #define PERCENT_PACKETLOSS 0.01
-#define TIME_PER_MOVEMENT 0.01f
+#define TIME_PER_MOVEMENT 0.1f
 
 enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK };
 
@@ -19,12 +19,13 @@ int movementID = 0;
 bool firstReset = true;
 sf::Vector2i desiredPos = sf::Vector2i(0, 0);
 sf::Vector2i previousDesiredPos = sf::Vector2i(0, 0);
-int timeAnimation = 50;
+int timeAnimation = 100;
 
 struct Player
 {
 	sf::Vector2i cellPos;
 	sf::Vector2i pixelPos; //usaremos este para la interpolacion y prediccion
+	sf::Vector2i desiredCellPos = sf::Vector2i(0, 0);
 	int playerID;
 	sf::Color pjColor;
 };
@@ -165,35 +166,35 @@ void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 	}	//BORRA TODO LO SIGUIENTE AL DENEGADO Y REINICIA DESIRED POS CON EL ÚLTIMO NO CONFIRMADO AÚN
 }
 
-void PredictionFunc(sf::Vector2i curCellPos, sf::Vector2i desiredCellPos, int timeAnim) {
+void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desiredCellPos, int timeAnim) {
 	sf::Vector2i distanceToTravel = desiredCellPos - curCellPos;
 	distanceToTravel *= 40; //cell to pixel
 	bool changeCellPos = false;
 	if (distanceToTravel.x != 0) { //cambiar posicion si eso
 		distanceToTravel.x /= timeAnim;
-		players[0].pixelPos += distanceToTravel;
+		players[playerIndex].pixelPos += distanceToTravel;
 
-		if (distanceToTravel.x < 0 && players[0].pixelPos.x < desiredCellPos.x * 40) {
+		if (distanceToTravel.x < 0 && players[playerIndex].pixelPos.x < desiredCellPos.x * 40) {
 			changeCellPos = true;
 		}
-		else if (distanceToTravel.x > 0 && players[0].pixelPos.x > desiredCellPos.x * 40) {
+		else if (distanceToTravel.x > 0 && players[playerIndex].pixelPos.x > desiredCellPos.x * 40) {
 			changeCellPos = true;
 		}
 	}
 	else if (distanceToTravel.y != 0) {
 		distanceToTravel.y /= timeAnim;
-		players[0].pixelPos += distanceToTravel;
+		players[playerIndex].pixelPos += distanceToTravel;
 
-		if (distanceToTravel.y < 0 && players[0].pixelPos.y < desiredCellPos.y * 40) {
+		if (distanceToTravel.y < 0 && players[playerIndex].pixelPos.y < desiredCellPos.y * 40) {
 			changeCellPos = true;
 		}
-		else if (distanceToTravel.y > 0 && players[0].pixelPos.y > desiredCellPos.y * 40) {
+		else if (distanceToTravel.y > 0 && players[playerIndex].pixelPos.y > desiredCellPos.y * 40) {
 			changeCellPos = true;
 		}
 	}
 	if (changeCellPos) {
-		players[0].cellPos = desiredCellPos;
-		players[0].pixelPos = desiredCellPos * 40; //reajustar
+		players[playerIndex].cellPos = desiredCellPos;
+		players[playerIndex].pixelPos = desiredCellPos * 40; //reajustar
 	}
 		
 	
@@ -314,6 +315,7 @@ void DibujaSFML()
 							pck >> tempPlayer.cellPos.x;
 							pck >> tempPlayer.cellPos.y;
 							tempPlayer.pixelPos = tempPlayer.cellPos * 40;
+							tempPlayer.desiredCellPos = tempPlayer.cellPos;
 							players.push_back(tempPlayer);
 						}
 						pck >> idMessage;
@@ -331,6 +333,7 @@ void DibujaSFML()
 						pck >> tempPlayer.cellPos.x;
 						pck >> tempPlayer.cellPos.y;
 						tempPlayer.pixelPos = tempPlayer.cellPos * 40;
+						tempPlayer.desiredCellPos = tempPlayer.cellPos;
 
 						std::cout << "recibo un nuevo jugador id: " << tempPlayer.playerID << std::endl;
 						//revisar si ya tengo a este jugador i guess
@@ -418,6 +421,9 @@ void DibujaSFML()
 						pck >> idMessage;
 						MessageConfirmed(idMessage);				//CONFIRMO MSG
 						MovementDenied(idMov, idPlayer);			//BORRO EL HISTORIAL A PARTIR DEL DENEGADO
+						players[0].cellPos = confirmedPos;
+						desiredPos = confirmedPos;
+						players[0].pixelPos = players[0].cellPos * 40;
 						break;
 					}
 					case PEM: {
@@ -428,8 +434,8 @@ void DibujaSFML()
 						pck >> confirmedPos.y;
 						std::vector<Player>::iterator tempItPlayerToMove = PlayerItIndexByID(tempIDPlayer);
 						if (tempItPlayerToMove != players.end()) {
-							tempItPlayerToMove->cellPos = confirmedPos;
-							tempItPlayerToMove->pixelPos = tempItPlayerToMove->cellPos * 40;
+							tempItPlayerToMove->desiredCellPos = confirmedPos;
+							//tempItPlayerToMove->pixelPos = tempItPlayerToMove->cellPos * 40;
 						}
 						pck >> idMessage;
 						sf::Packet pckAck;
@@ -452,10 +458,14 @@ void DibujaSFML()
 		//std::cout << chronoDeltaTime.getElapsedTime().asMilliseconds() << std::endl;
 		//chronoDeltaTime.restart().asMilliseconds();
 		if (players.size() > 0) {
+
+			players[0].desiredCellPos = desiredPos;
 			//funcion que a partir de decide el smooth del prediction a partir del tiempo que queremos que dure la animacion
 			int curTime = chronoAnimationTime.getElapsedTime().asMilliseconds();
 			if (curTime > timeAnimation / 10) { //10 es el numero de movimientos antes de llegar al destino
-				PredictionFunc(players[0].cellPos, desiredPos, timeAnimation / 10);
+				for (int i = 0; i < players.size(); i++) {
+					PredictionFunc(i, players[i].cellPos, players[i].desiredCellPos, timeAnimation / 10);
+				}
 				chronoAnimationTime.restart();
 			}
 		}
@@ -475,8 +485,6 @@ void DibujaSFML()
 			rectAvatar.setPosition(sf::Vector2f(200 + p.pixelPos.x, p.pixelPos.y));
 			window.draw(rectAvatar);
 		}
-		
-
 		window.display();
 	}
 

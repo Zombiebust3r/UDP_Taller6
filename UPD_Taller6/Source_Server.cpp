@@ -339,8 +339,11 @@ int main()
 						sf::Packet nokPack;
 						nokPack << Commands::NOK;
 						nokPack << tempMov.player.playerID;
-						nokPack << tempMov.pos.x;
-						nokPack << tempMov.pos.y;
+						//enviar ultima pos aceptada
+						int indexPlayerOkMove;
+						indexPlayerOkMove = PlayerIndexByPORT(tempMov.player.port);
+						nokPack << players[indexPlayerOkMove].pos.x;
+						nokPack << players[indexPlayerOkMove].pos.y;
 						nokPack << tempMov.idMov;
 						nokPack << tempMov.idMessage;
 						sock.send(nokPack, tempMov.player.ip, tempMov.player.port);	//SE MANDA AL JUGADOR QUE SE MUEVE

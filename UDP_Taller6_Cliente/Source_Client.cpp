@@ -8,9 +8,11 @@
 #define PORT_SERVER 50000
 
 #define PERCENT_PACKETLOSS 0.01
-#define TIME_PER_MOVEMENT 0.1f
+#define TIME_PER_MOVEMENT 1.0f
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR };
+
+enum State {WAITING, PLAYING, WAITINGFORCOLOR};
 
 int pos;
 sf::UdpSocket sock;
@@ -21,6 +23,12 @@ sf::Vector2i desiredPos = sf::Vector2i(0, 0);
 sf::Vector2i previousDesiredPos = sf::Vector2i(0, 0);
 int timeAnimation = 100;
 
+struct Cell
+{
+	sf::Vector2i pos;
+	sf::Color color;
+};
+
 struct Player
 {
 	sf::Vector2i cellPos;
@@ -28,6 +36,7 @@ struct Player
 	sf::Vector2i desiredCellPos = sf::Vector2i(0, 0);
 	int playerID;
 	sf::Color pjColor;
+	bool dead;
 };
 
 struct PendingMessage {
@@ -50,6 +59,8 @@ std::vector<Player> players = std::vector<Player>();
 std::vector<PendingMessage> messagePending = std::vector<PendingMessage>();
 
 std::vector<PendingMovement> movementsPending = std::vector<PendingMovement>();
+
+std::vector<Cell> cells = std::vector<Cell>();
 
 std::vector<Player>::iterator PlayerItIndexByID(int _id) {
 	std::vector<Player>::iterator it = players.begin();
@@ -169,10 +180,11 @@ void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desiredCellPos, int timeAnim) {
 	sf::Vector2i distanceToTravel = desiredCellPos - curCellPos;
 	distanceToTravel *= 40; //cell to pixel
+	std::cout << distanceToTravel.x << ", " << distanceToTravel.y << std::endl;
 	bool changeCellPos = false;
 	if (distanceToTravel.x != 0) { //cambiar posicion si eso
 		distanceToTravel.x /= timeAnim;
-		players[playerIndex].pixelPos += distanceToTravel;
+		players[playerIndex].pixelPos.x += distanceToTravel.x;
 
 		if (distanceToTravel.x < 0 && players[playerIndex].pixelPos.x < desiredCellPos.x * 40) {
 			changeCellPos = true;
@@ -183,7 +195,7 @@ void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desir
 	}
 	else if (distanceToTravel.y != 0) {
 		distanceToTravel.y /= timeAnim;
-		players[playerIndex].pixelPos += distanceToTravel;
+		players[playerIndex].pixelPos.y += distanceToTravel.y;
 
 		if (distanceToTravel.y < 0 && players[playerIndex].pixelPos.y < desiredCellPos.y * 40) {
 			changeCellPos = true;
@@ -199,6 +211,138 @@ void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desir
 		
 	
 }
+
+void InitCells() {
+	//INIT CELLS:
+	//5x5 (0, 0) : (200, 0)
+	Cell tempCell;
+	//0, 0
+	tempCell.pos = sf::Vector2i(0, 0);
+	tempCell.color = sf::Color(255, 255, 0, 255);
+	cells.push_back(tempCell);
+
+	//0, 1
+	tempCell.pos = sf::Vector2i(0, 1);
+	tempCell.color = sf::Color(51, 255, 51, 255);
+	cells.push_back(tempCell);
+
+	//0, 2
+	tempCell.pos = sf::Vector2i(0, 2);
+	tempCell.color = sf::Color(51, 51, 255, 255);
+	cells.push_back(tempCell);
+
+	//0, 3
+	tempCell.pos = sf::Vector2i(0, 3);
+	tempCell.color = sf::Color(204, 0, 153, 255);
+	cells.push_back(tempCell);
+
+	//0, 4
+	tempCell.pos = sf::Vector2i(0, 4);
+	tempCell.color = sf::Color(255, 255, 255, 255);
+	cells.push_back(tempCell);
+
+	//1, 0
+	tempCell.pos = sf::Vector2i(1, 0);
+	tempCell.color = sf::Color(255, 102, 0, 255);
+	cells.push_back(tempCell);
+
+	//1, 1
+	tempCell.pos = sf::Vector2i(1, 1);
+	tempCell.color = sf::Color(0, 102, 102, 255);
+	cells.push_back(tempCell);
+
+	//1, 2
+	tempCell.pos = sf::Vector2i(1, 2);
+	tempCell.color = sf::Color(0, 102, 153, 255);
+	cells.push_back(tempCell);
+
+	//1, 3
+	tempCell.pos = sf::Vector2i(1, 3);
+	tempCell.color = sf::Color(102, 0, 51, 255);
+	cells.push_back(tempCell);
+
+	//1, 4
+	tempCell.pos = sf::Vector2i(1, 4);
+	tempCell.color = sf::Color(255, 51, 0, 255);
+	cells.push_back(tempCell);
+
+	//2, 0
+	tempCell.pos = sf::Vector2i(2, 0);
+	tempCell.color = sf::Color(255, 255, 153, 255);
+	cells.push_back(tempCell);
+
+	//2, 1
+	tempCell.pos = sf::Vector2i(2, 1);
+	tempCell.color = sf::Color(255, 0, 255, 255);
+	cells.push_back(tempCell);
+
+	//2, 2
+	tempCell.pos = sf::Vector2i(2, 2);
+	tempCell.color = sf::Color(102, 102, 153, 255);
+	cells.push_back(tempCell);
+
+	//2, 3
+	tempCell.pos = sf::Vector2i(2, 3);
+	tempCell.color = sf::Color(51, 51, 0, 255);
+	cells.push_back(tempCell);
+
+	//2, 4
+	tempCell.pos = sf::Vector2i(2, 4);
+	tempCell.color = sf::Color(0, 153, 255, 255);
+	cells.push_back(tempCell);
+
+	//3, 0
+	tempCell.pos = sf::Vector2i(3, 0);
+	tempCell.color = sf::Color(24, 24, 111, 255);
+	cells.push_back(tempCell);
+
+	//3, 1
+	tempCell.pos = sf::Vector2i(3, 1);
+	tempCell.color = sf::Color(121, 122, 43, 255);
+	cells.push_back(tempCell);
+
+	//3, 2
+	tempCell.pos = sf::Vector2i(3, 2);
+	tempCell.color = sf::Color(204, 153, 255, 255);
+	cells.push_back(tempCell);
+
+	//3, 3
+	tempCell.pos = sf::Vector2i(3, 3);
+	tempCell.color = sf::Color(102, 255, 102, 255);
+	cells.push_back(tempCell);
+
+	//3, 4
+	tempCell.pos = sf::Vector2i(3, 4);
+	tempCell.color = sf::Color(160, 160, 74, 255);
+	cells.push_back(tempCell);
+
+	//4, 0
+	tempCell.pos = sf::Vector2i(4, 0);
+	tempCell.color = sf::Color(241, 88, 88, 255);
+	cells.push_back(tempCell);
+
+	//4, 1
+	tempCell.pos = sf::Vector2i(4, 1);
+	tempCell.color = sf::Color(135, 38, 131, 255);
+	cells.push_back(tempCell);
+
+	//4, 2
+	tempCell.pos = sf::Vector2i(4, 2);
+	tempCell.color = sf::Color(204, 0, 0, 255);
+	cells.push_back(tempCell);
+
+	//4, 3
+	tempCell.pos = sf::Vector2i(4, 3);
+	tempCell.color = sf::Color(201, 165, 35, 255);
+	cells.push_back(tempCell);
+
+	//4, 4
+	tempCell.pos = sf::Vector2i(4, 4);
+	tempCell.color = sf::Color(51, 153, 0, 255);
+	cells.push_back(tempCell);
+
+}
+
 void DibujaSFML()
 {
 	sf::RenderWindow window(sf::VideoMode(800, 600), "Sin acumulación en cliente");
@@ -303,6 +447,7 @@ void DibujaSFML()
 						desiredPos = sPlayer.cellPos;
 						previousDesiredPos = desiredPos;
 						sPlayer.pixelPos = sPlayer.cellPos * 40;
+						sPlayer.dead = false;
 						players.push_back(sPlayer); //own player siempre estará en posicion 0 del vector -- IMPORTANTE!!! SI SE CAMBIA ESTO HAY QUE CAMBIAR EL SET DEL DESIRED POS EN EL MOVEMENT DENIDED
 						std::cout << "OWN ID: " << sPlayer.playerID << std::endl;
 						for (int i = 0; i < numPlayers - 1; i++) { //-1 ya que no se añade a si mismo lel
@@ -316,6 +461,7 @@ void DibujaSFML()
 							pck >> tempPlayer.cellPos.y;
 							tempPlayer.pixelPos = tempPlayer.cellPos * 40;
 							tempPlayer.desiredCellPos = tempPlayer.cellPos;
+							tempPlayer.dead = false;
 							players.push_back(tempPlayer);
 						}
 						pck >> idMessage;
@@ -334,6 +480,7 @@ void DibujaSFML()
 						pck >> tempPlayer.cellPos.y;
 						tempPlayer.pixelPos = tempPlayer.cellPos * 40;
 						tempPlayer.desiredCellPos = tempPlayer.cellPos;
+						tempPlayer.dead = false;
 
 						std::cout << "recibo un nuevo jugador id: " << tempPlayer.playerID << std::endl;
 						//revisar si ya tengo a este jugador i guess
@@ -477,14 +624,29 @@ void DibujaSFML()
 		window.draw(rectBlanco);
 		rectBlanco.setPosition(sf::Vector2f(600, 0));
 		window.draw(rectBlanco);
+		
+		//DRAW CELLS
+		for each (Cell c in cells)
+		{
+			sf::RectangleShape rectAvatar(sf::Vector2f(40, 40));
+			rectAvatar.setFillColor(c.color);
+			rectAvatar.setPosition(sf::Vector2f(200 + c.pos.x * 40, c.pos.y * 40));
+			window.draw(rectAvatar);
+
+		}
 
 		//For para cada jugador -> rectAvatar(players[i].pos) | rectAvatar(sf::Vector2f(players[i].pos.x, players[i].pos.y))
 		for (auto p : players) {
-			sf::RectangleShape rectAvatar(sf::Vector2f(40, 40));
-			rectAvatar.setFillColor(p.pjColor);
-			rectAvatar.setPosition(sf::Vector2f(200 + p.pixelPos.x, p.pixelPos.y));
-			window.draw(rectAvatar);
+			if (!p.dead) {
+				sf::RectangleShape rectAvatar(sf::Vector2f(40, 40));
+				rectAvatar.setFillColor(p.pjColor);
+				rectAvatar.setPosition(sf::Vector2f(200 + p.pixelPos.x, p.pixelPos.y));
+				window.draw(rectAvatar);
+			}
 		}
+
+		
+
 		window.display();
 	}
 
@@ -492,6 +654,7 @@ void DibujaSFML()
 
 int main(){
 	pos = 200;
+	InitCells();
 	sock.setBlocking(false);
 	//sistema HEY
 	sf::Packet pckHey;

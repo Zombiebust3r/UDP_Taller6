@@ -128,6 +128,9 @@
   <ItemGroup>
     <ClCompile Include="Source_Server.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Chronometer.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

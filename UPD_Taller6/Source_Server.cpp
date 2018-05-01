@@ -3,6 +3,10 @@
 #include <lib.h>
 #include <iostream>
 #include <random>
+#include "Chronometer.h"
+
+#define SET 0
+#define GET 1
 
 #define RIGHT_POS 600
 #define LEFT_POS 200
@@ -16,12 +20,31 @@
 #define PERCENT_PACKETLOSS 0.01
 #define TIME_PER_MOVEMENT 0.2f
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK };
 
+#define TIME_PER_TURN 10
+
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR, STP };
+//CLR_R_G_B						INFORMA DEL COLOR A BUSCAR
+//DED_#PLAYERSDEAD_ID_ID_ID...	INFORMA DE LOS JUGADORES MUERTOS
+//STP							MARCA EL FINAL DEL TURNO Y PARA EL MOVIMIENTO.
+
+enum State { WAITINGFORPLAYERS, CHOSINGCOLOR, WAITINGFORTURNEND, COMPUTINGMOVEMENT, WAITINGCLRCONFIRMATION };
+
+State actualState;
 int playerID = 1; //se irá sumando 1 cada jugador nuevo
 int actualID = 0;
 sf::UdpSocket sock;
 bool firstReset = true;
+sftools::Chronometer chrono;
+int playersColorConfirmed = 0; //Compare this to players.size();
+
+struct Cell
+{
+	sf::Vector2i pos;
+	sf::Color color;
+};
+
+Cell actualCellPicked;
 
 struct Player
 {
@@ -31,6 +54,8 @@ struct Player
 	int playerID;
 	sf::Color pjColor;
 	int pingTries;
+	bool dead;
+	bool colorConfirmed;
 };
 
 struct PendingMessage {
@@ -40,6 +65,7 @@ struct PendingMessage {
 	float maxTime;
 	sf::IpAddress targetAdress;
 	unsigned short port;
+	Commands commandType;
 };
 
 struct PendingMovement {
@@ -56,12 +82,16 @@ std::vector<PendingMovement> movementsPending = std::vector<PendingMovement>();
 
 std::vector<Player> players = std::vector<Player>();
 
+std::vector<Cell> cells = std::vector<Cell>();
+
 float GetRandomFloat() {
 	std::random_device rd;
 	std::mt19937 gen(rd());
 	std::uniform_real_distribution<float> dis(0.f, 1.f);
 	return dis(gen);
 }
+
+
 sf::Vector2i RandoPosGenerator() {
 	sf::Vector2i temp;
 	temp.x = (rand() % 10) + 0; //entre 0 y 10
@@ -70,6 +100,37 @@ sf::Vector2i RandoPosGenerator() {
 }
 
 void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsigned short _port);	//PREDEFINE
+
+State SetGetMode(int setOrGet, State mode) {
+	//static Mode sMode = Mode::NOTHING;
+	if (setOrGet == SET) {
+		switch (mode)
+		{
+		case WAITINGFORPLAYERS:
+			if (actualState != WAITINGFORPLAYERS) {  } // FIRST TIME CHANGING MODE
+			break;
+		case WAITINGFORTURNEND:
+			if (actualState != WAITINGFORTURNEND) { chrono.reset(true); } // FIRST TIME CHANGING MODE
+			break;
+		case CHOSINGCOLOR:
+			if (actualState != CHOSINGCOLOR) { 
+				playersColorConfirmed = 0;
+				for (int indexP = 0; indexP < players.size(); indexP++) { 
+					players[indexP].colorConfirmed = false; 
+				} 
+			} // FIRST TIME CHANGING MODE
+			break;
+		case COMPUTINGMOVEMENT:
+			if (actualState != COMPUTINGMOVEMENT) { chrono.reset(false); } // FIRST TIME CHANGING MODE
+			break;
+		default:
+			break;
+		}
+		actualState = mode;
+
+	}
+	return actualState;
+}
 
 Player MakePlayer(sf::IpAddress ipRem, short portRem) {
 
@@ -156,6 +217,7 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 	tempPending.targetAdress = _ip;
 	tempPending.port = _port;
 	tempPending.time = 0.0f;
+	tempPending.commandType = messageType;
 
 	switch (messageType)
 	{
@@ -169,6 +231,12 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 		tempPending.maxTime = PINGMAXTIME_MS;
 		break;
 	case PEM:
+		tempPending.maxTime = COMMANDMAXTIME_MS;
+	case STP:
+		tempPending.maxTime = COMMANDMAXTIME_MS;
+	case DED:
+		tempPending.maxTime = COMMANDMAXTIME_MS;
+	case CLR:
 		tempPending.maxTime = COMMANDMAXTIME_MS;
 	default:
 		tempPending.maxTime = COMMANDMAXTIME_MS;
@@ -264,6 +332,38 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
 		if (iteratorToDelete->id == _ID) {
 			//FOUND MY MESSAGE TO DELETE
+			int playerIndex = 0;
+			if (iteratorToDelete->maxTime == PINGMAXTIME_MS) {
+				std::cout << "ACK PING" << std::endl;
+				pingMessage = true;
+				playerIndex = PlayerIndexByPORT(iteratorToDelete->port);
+				if (playerIndex != -1) {
+					players[playerIndex].pingTries = 0;
+				}
+			}
+			if (iteratorToDelete->commandType == Commands::CLR && !players[playerIndex].colorConfirmed) {	//VERIFICACION PARA SABER SI EL ACK ES PARA UN CLR Y PODER SABER DESPUÉS SI YA SE HAN CONFIRMADO TODOS.
+				playersColorConfirmed++;
+				players[playerIndex].colorConfirmed = true;
+			}
+			found = true;
+		}
+		else { indexToDelete++; iteratorToDelete++; }
+	}
+
+	if (found && !pingMessage) { messagePending.erase(iteratorToDelete); }
+}
+
+/*
+
+void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
+	int indexToDelete = 0;
+	bool found = false;
+	bool pingMessage = false;
+	std::vector<PendingMessage>::iterator iteratorToDelete = messagePending.begin();
+
+	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
+		if (iteratorToDelete->id == _ID) {
+			//FOUND MY MESSAGE TO DELETE
 			if (iteratorToDelete->maxTime == PINGMAXTIME_MS) {
 				std::cout << "ACK PING" << std::endl;
 				pingMessage = true;
@@ -280,9 +380,155 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 	if (found && !pingMessage) { messagePending.erase(iteratorToDelete); }
 }
 
+*/
+
+void InitCells() {
+	//INIT CELLS:
+	//5x5 (0, 0) : (200, 0)
+	Cell tempCell;
+	//0, 0
+	tempCell.pos = sf::Vector2i(0, 0);
+	tempCell.color = sf::Color(255, 255, 0, 255);
+	cells.push_back(tempCell);
+
+	//0, 1
+	tempCell.pos = sf::Vector2i(0, 1);
+	tempCell.color = sf::Color(51, 255, 51, 255);
+	cells.push_back(tempCell);
+
+	//0, 2
+	tempCell.pos = sf::Vector2i(0, 2);
+	tempCell.color = sf::Color(51, 51, 255, 255);
+	cells.push_back(tempCell);
+
+	//0, 3
+	tempCell.pos = sf::Vector2i(0, 3);
+	tempCell.color = sf::Color(204, 0, 153, 255);
+	cells.push_back(tempCell);
+	
+	//0, 4
+	tempCell.pos = sf::Vector2i(0, 4);
+	tempCell.color = sf::Color(255, 255, 255, 255);
+	cells.push_back(tempCell);
+
+	//1, 0
+	tempCell.pos = sf::Vector2i(1, 0);
+	tempCell.color = sf::Color(255, 102, 0, 255);
+	cells.push_back(tempCell);
+
+	//1, 1
+	tempCell.pos = sf::Vector2i(1, 1);
+	tempCell.color = sf::Color(0, 102, 102, 255);
+	cells.push_back(tempCell);
+
+	//1, 2
+	tempCell.pos = sf::Vector2i(1, 2);
+	tempCell.color = sf::Color(0, 102, 153, 255);
+	cells.push_back(tempCell);
+
+	//1, 3
+	tempCell.pos = sf::Vector2i(1, 3);
+	tempCell.color = sf::Color(102, 0, 51, 255);
+	cells.push_back(tempCell);
+
+	//1, 4
+	tempCell.pos = sf::Vector2i(1, 4);
+	tempCell.color = sf::Color(255, 51, 0, 255);
+	cells.push_back(tempCell);
+
+	//2, 0
+	tempCell.pos = sf::Vector2i(2, 0);
+	tempCell.color = sf::Color(255, 255, 153, 255);
+	cells.push_back(tempCell);
+
+	//2, 1
+	tempCell.pos = sf::Vector2i(2, 1);
+	tempCell.color = sf::Color(255, 0, 255, 255);
+	cells.push_back(tempCell);
+
+	//2, 2
+	tempCell.pos = sf::Vector2i(2, 2);
+	tempCell.color = sf::Color(102, 102, 153, 255);
+	cells.push_back(tempCell);
+
+	//2, 3
+	tempCell.pos = sf::Vector2i(2, 3);
+	tempCell.color = sf::Color(51, 51, 0, 255);
+	cells.push_back(tempCell);
+
+	//2, 4
+	tempCell.pos = sf::Vector2i(2, 4);
+	tempCell.color = sf::Color(0, 153, 255, 255);
+	cells.push_back(tempCell);
+
+	//3, 0
+	tempCell.pos = sf::Vector2i(3, 0);
+	tempCell.color = sf::Color(24, 24, 111, 255);
+	cells.push_back(tempCell);
+
+	//3, 1
+	tempCell.pos = sf::Vector2i(3, 1);
+	tempCell.color = sf::Color(121, 122, 43, 255);
+	cells.push_back(tempCell);
+
+	//3, 2
+	tempCell.pos = sf::Vector2i(3, 2);
+	tempCell.color = sf::Color(204, 153, 255, 255);
+	cells.push_back(tempCell);
+
+	//3, 3
+	tempCell.pos = sf::Vector2i(3, 3);
+	tempCell.color = sf::Color(102, 255, 102, 255);
+	cells.push_back(tempCell);
+
+	//3, 4
+	tempCell.pos = sf::Vector2i(3, 4);
+	tempCell.color = sf::Color(160, 160, 74, 255);
+	cells.push_back(tempCell);
+
+	//4, 0
+	tempCell.pos = sf::Vector2i(4, 0);
+	tempCell.color = sf::Color(241, 88, 88, 255);
+	cells.push_back(tempCell);
+
+	//4, 1
+	tempCell.pos = sf::Vector2i(4, 1);
+	tempCell.color = sf::Color(135, 38, 131, 255);
+	cells.push_back(tempCell);
+
+	//4, 2
+	tempCell.pos = sf::Vector2i(4, 2);
+	tempCell.color = sf::Color(204, 0, 0, 255);
+	cells.push_back(tempCell);
+
+	//4, 3
+	tempCell.pos = sf::Vector2i(4, 3);
+	tempCell.color = sf::Color(201, 165, 35, 255);
+	cells.push_back(tempCell);
+
+	//4, 4
+	tempCell.pos = sf::Vector2i(4, 4);
+	tempCell.color = sf::Color(51, 153, 0, 255);
+	cells.push_back(tempCell);
+
+
+	actualCellPicked = cells[0];
+}
+
+Cell RandomCell() {
+	Cell tempCell;
+	int randomCellNum = (rand() % 5) + 0; //random lel
+
+	tempCell = cells[randomCellNum];
+	return tempCell;
+}
+
 int main()
 {
 	srand(time(NULL));
+
+	InitCells();
+
 	sock.setBlocking(false);
 	sf::Socket::Status status = sock.bind(50000);
 	if (status != sf::Socket::Done)
@@ -294,8 +540,11 @@ int main()
 	sf::Clock clock;
 	sf::Clock clockDeltaTime;
 	sf::Clock clockMovTime;
+	actualState = SetGetMode(SET, State::WAITINGFORPLAYERS);
+
 	do
 	{
+		sf::Time time = chrono;	//Time per turn
 		if (clock.getElapsedTime().asMilliseconds() > 200)
 		{
 			float movementDeltaTime = clockMovTime.getElapsedTime().asSeconds();
@@ -353,6 +602,8 @@ int main()
 				clockMovTime.restart();
 			}
 
+			//RECIEVE
+
 			sf::Packet pck;
 			sf::IpAddress ipRem; unsigned short portRem;
 			//std::cout << "preReceive------------------------------------------------------------------------" << std::endl;
@@ -408,6 +659,8 @@ int main()
 									AddMessage(Commands::NEW, pckNew, players[i].ip, players[i].port);
 								}
 								//añadir usuario a lista
+								tempPlayer.dead = false;
+								tempPlayer.colorConfirmed = false;
 								players.push_back(tempPlayer);
 							}
 
@@ -416,6 +669,8 @@ int main()
 							//crear usuario
 							tempPlayer = MakePlayer(ipRem, portRem);
 							//añadir usuario a lista
+							tempPlayer.dead = false;
+							tempPlayer.colorConfirmed = false;
 							players.push_back(tempPlayer);
 						}
 						//añadido usuario
@@ -480,7 +735,68 @@ int main()
 					
 				}
 				*/
-			}
+
+				//GAME LOGIC:
+				if (actualState != WAITINGFORPLAYERS) {	//ALL PLAYERS CONNECTED AND READY
+					//CHOOSE COLOR
+					if (actualState == State::CHOSINGCOLOR) {
+						actualCellPicked = RandomCell();
+						sf::Packet colorPacket;
+						colorPacket << Commands::CLR;
+						colorPacket << actualCellPicked.color.r;
+						colorPacket << actualCellPicked.color.g;
+						colorPacket << actualCellPicked.color.b;
+						//SEND COLOR
+						for each (Player p in players) {
+							AddMessage(Commands::CLR, colorPacket, p.ip, p.port);
+						}
+
+						SetGetMode(SET, State::WAITINGCLRCONFIRMATION);
+					}
+					else if (actualState == State::WAITINGCLRCONFIRMATION) {
+						if (playersColorConfirmed >= players.size()) {	//>= para evitar que si un jugador se desconecta en mitad y el número es superior de repente que aún así se triguee. MODO SEGURO MIRAR QUE TODOS TENGAN EL FLAG DE COLOR CONFIRMED PUESTO A TRUE.
+							SetGetMode(SET, State::WAITINGFORTURNEND);
+						}
+					}
+					else if (actualState == State::WAITINGFORTURNEND) {	//WAIT FOR MOVEMENT
+						if (int(time.asSeconds()) >= TIME_PER_TURN) {
+							sf::Packet stopPacket;
+							stopPacket << Commands::STP;
+							for each (Player p in players) {
+								AddMessage(Commands::STP, stopPacket, p.ip, p.port);
+							}
+
+							SetGetMode(SET, State::COMPUTINGMOVEMENT);
+						}
+					}
+					else if (actualState == State::COMPUTINGMOVEMENT) {	//COMPUTE MOVEMENT WHEN TIME'S UP
+						int playersDead = 0;
+						sf::Packet deadPlayersPacket;
+						deadPlayersPacket << Commands::DED;
+						for (int asd = 0; asd < players.size(); asd++) {	//MIRO SI HAN MUERTO Y SUMO 1 AL NÚMERO DE PLAYERS MUERTOS
+							if (players[asd].pos != actualCellPicked.pos) {	//PLAYER IS DEAD
+								players[asd].dead = true;
+								playersDead++;
+							}
+						}
+
+						if (playersDead > 0) {	//SI EL NÚMERO DE PLAYERS MUERTOS ES > 0
+							deadPlayersPacket << playersDead;
+							for (int asd = 0; asd < players.size(); asd++) {	//BUCLE PARA PILLAR EL ID DE LOS MUERTOS Y METERLOS EN EL PACKET
+								if (players[asd].dead) {	//PLAYER IS DEAD
+									deadPlayersPacket << players[asd].playerID;
+								}
+							}
+							for (int asd = 0; asd < players.size(); asd++) {	//BUCLE PARA MANDAR EL PACKET
+								AddMessage(Commands::DED, deadPlayersPacket, players[asd].ip, players[asd].port);
+							}
+							
+						}
+					}
+
+					//REPEAT
+				}
+			} 
 			clock.restart();
 		}
 		if (firstReset) { clockDeltaTime.restart(); firstReset = false; }

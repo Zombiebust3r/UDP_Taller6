@@ -364,7 +364,12 @@ void DibujaSFML()
 			switch (event.type)
 			{
 			case sf::Event::Closed:
+			{
+				sf::Packet disPack;
+				disPack << Commands::DIS;
+				sock.send(disPack, IP_SERVER, PORT_SERVER);
 				window.close();
+			}
 				break;
 			case sf::Event::KeyPressed:
 				if (event.key.code == sf::Keyboard::Left && !players[0].dead)

@@ -261,6 +261,25 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 	actualID++;
 }
 
+void DeletePlayer(int playerIndex) {
+	///std::cout << "DISCONNECTED PLAYER " << players[playerIndex].playerID << std::endl;
+	//CREATE DIS PACKET: DIS_IDPLAYER_IDMESSAGE
+	sf::Packet disconnectionPacket;	//PAQUETE PARA EL RESTO DE JUGADORES QUE NO DESCONECTAS
+	disconnectionPacket << Commands::DIS;
+	sf::Packet exePacket; //PAQUETE PARA EL QUE DESCONECTAS
+	exePacket << Commands::EXE;
+	//DISCONNECT THAT PLAYER -----------------------------------------------------------------------------------------------------------------------------------
+	std::vector<Player>::iterator playerToDelete = PlayerItIndexByPORT(players[playerIndex].port);
+	sock.send(exePacket, playerToDelete->ip, playerToDelete->port);
+	disconnectionPacket << playerToDelete->playerID;
+	if (playerToDelete != players.end()) players.erase(playerToDelete);
+
+	//MANDAR A TODOS LOS JUGADORES:
+	for (int toAll = 0; toAll < players.size(); toAll++) {
+		AddMessage(Commands::DIS, disconnectionPacket, players[toAll].ip, players[toAll].port);
+	}
+}
+
 void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN QUE MANDAR SIEMPRE Y CUANDO EL JUGADOR AL QUE SE ENVÍA NO ESTÁ DESCONECTADO
 	std::vector<PendingMessage>::iterator messageToDelete;
 	//std::cout << "MESSAGE SIZE: " << messagePending.size() << std::endl;
@@ -278,25 +297,9 @@ void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN Q
 					players[playerIndex].pingTries += 1;
 					///std::cout << "PLAYER " << players[playerIndex].playerID << " PING TRIES " << players[playerIndex].pingTries << std::endl;
 					if (players[playerIndex].pingTries >= MAXPINTTRIES) {
-						///std::cout << "DISCONNECTED PLAYER " << players[playerIndex].playerID << std::endl;
-						//CREATE DIS PACKET: DIS_IDPLAYER_IDMESSAGE
-						sf::Packet disconnectionPacket;	//PAQUETE PARA EL RESTO DE JUGADORES QUE NO DESCONECTAS
-						disconnectionPacket << Commands::DIS;
-						sf::Packet exePacket; //PAQUETE PARA EL QUE DESCONECTAS
-						exePacket << Commands::EXE;
-						//DISCONNECT THAT PLAYER -----------------------------------------------------------------------------------------------------------------------------------
-						std::vector<Player>::iterator playerToDelete = PlayerItIndexByPORT(messagePending[i].port);
-						sock.send(exePacket, playerToDelete->ip, playerToDelete->port);
-						disconnectionPacket << playerToDelete->playerID;
-						if (playerToDelete != players.end()) players.erase(playerToDelete);
-						//DELETE PING MESSAGE FROM PENDING MESSAGES ----------------------------------------------------------------------------------------------------------------
-						messageToDelete = MessageItIndexByIP(messagePending[i].id);
+						DeletePlayer(playerIndex);
 						send = false;
 						
-						//MANDAR A TODOS LOS JUGADORES:
-						for (int toAll = 0; toAll < players.size(); toAll++) {
-							AddMessage(Commands::DIS, disconnectionPacket, players[toAll].ip, players[toAll].port);
-						}
 					}
 				}
 			}
@@ -680,6 +683,11 @@ int main()
 						pck >> idMessage;
 						//std::cout << "ID MESSAGE" << idMessage << std::endl;
 						MessageConfirmed(idMessage);
+						break;
+					case DIS:
+
+						DeletePlayer(PlayerIndexByPORT(portRem));
+
 						break;
 					case MOV:
 						///std::cout << "RECEIVED MOVE" << std::endl;

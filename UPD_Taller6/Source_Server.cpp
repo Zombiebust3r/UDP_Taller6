@@ -22,13 +22,14 @@
 
 
 #define TIME_PER_TURN 10
+#define MAX_PLAYERS 3
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR, STP };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR };
 //CLR_R_G_B						INFORMA DEL COLOR A BUSCAR
 //DED_#PLAYERSDEAD_ID_ID_ID...	INFORMA DE LOS JUGADORES MUERTOS
 //STP							MARCA EL FINAL DEL TURNO Y PARA EL MOVIMIENTO.
 
-enum State { WAITINGFORPLAYERS, CHOSINGCOLOR, WAITINGFORTURNEND, COMPUTINGMOVEMENT, WAITINGCLRCONFIRMATION };
+enum State { WAITINGFORPLAYERS, CHOSINGCOLOR, WAITINGFORTURNEND, COMPUTINGMOVEMENT, WAITINGCLRCONFIRMATION, WAITINGDEDCONFIRMATION };
 
 State actualState;
 int playerID = 1; //se irá sumando 1 cada jugador nuevo
@@ -37,6 +38,7 @@ sf::UdpSocket sock;
 bool firstReset = true;
 sftools::Chronometer chrono;
 int playersColorConfirmed = 0; //Compare this to players.size();
+int playersDeadConfirmed = 0;  //Comper this to players.size();
 
 struct Cell
 {
@@ -56,6 +58,7 @@ struct Player
 	int pingTries;
 	bool dead;
 	bool colorConfirmed;
+	bool deadConfirmed;
 };
 
 struct PendingMessage {
@@ -107,21 +110,30 @@ State SetGetMode(int setOrGet, State mode) {
 		switch (mode)
 		{
 		case WAITINGFORPLAYERS:
-			if (actualState != WAITINGFORPLAYERS) {  } // FIRST TIME CHANGING MODE
+			if (actualState != WAITINGFORPLAYERS) { /*std::cout << "Waiting for players to connect..." << std::endl;*/ } // FIRST TIME CHANGING MODE
 			break;
 		case WAITINGFORTURNEND:
-			if (actualState != WAITINGFORTURNEND) { chrono.reset(true); } // FIRST TIME CHANGING MODE
+			if (actualState != WAITINGFORTURNEND) { chrono.reset(true); /*std::cout << "Turn in progress..." << std::endl;*/ } // FIRST TIME CHANGING MODE
 			break;
 		case CHOSINGCOLOR:
+			//std::cout << "COLOR SELECTED--------------------------------------------------------------------------------------------------------------------------------------------------" << std::endl;
 			if (actualState != CHOSINGCOLOR) { 
 				playersColorConfirmed = 0;
+				playersDeadConfirmed = 0;
 				for (int indexP = 0; indexP < players.size(); indexP++) { 
 					players[indexP].colorConfirmed = false; 
+					players[indexP].deadConfirmed = false;
 				} 
 			} // FIRST TIME CHANGING MODE
 			break;
 		case COMPUTINGMOVEMENT:
-			if (actualState != COMPUTINGMOVEMENT) { chrono.reset(false); } // FIRST TIME CHANGING MODE
+			if (actualState != COMPUTINGMOVEMENT) { chrono.reset(false); /*std::cout << "Computing deaths..." << std::endl;*/ } // FIRST TIME CHANGING MODE
+			break;
+		case WAITINGCLRCONFIRMATION:
+			if (actualState != WAITINGCLRCONFIRMATION) { /*std::cout << "WAITING FOR CLR CONFIRMATION..." << std::endl;*/ }	//Waiting for players to confirm they recieved the color
+			break;
+		case WAITINGDEDCONFIRMATION:
+			if (actualState != WAITINGDEDCONFIRMATION) { /*std::cout << "STATE: " << actualState << std::endl; std::cout << "WAITING FOR DED CONFIRMATION..." << std::endl;*/ }	//Waiting for players to confirm they recieved the dead people
 			break;
 		default:
 			break;
@@ -232,8 +244,8 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 		break;
 	case PEM:
 		tempPending.maxTime = COMMANDMAXTIME_MS;
-	case STP:
-		tempPending.maxTime = COMMANDMAXTIME_MS;
+	//case STP:
+	//	tempPending.maxTime = COMMANDMAXTIME_MS;
 	case DED:
 		tempPending.maxTime = COMMANDMAXTIME_MS;
 	case CLR:
@@ -258,15 +270,15 @@ void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN Q
 		//std::cout << "TIME " << messagePending[i].maxTime << " ACTUALTIME " << messagePending[i].time << std::endl;
 		if (messagePending[i].time > messagePending[i].maxTime) {
 			//RESEND MESSAGE
-			std::cout << "EXCEEDED TIME " << messagePending[i].maxTime << std::endl;
+			///std::cout << "EXCEEDED TIME " << messagePending[i].maxTime << std::endl;
 			if (messagePending[i].maxTime == PINGMAXTIME_MS) { //RESSENDING PING
-				std::cout << "RESENDING PING" << std::endl;
+				///std::cout << "RESENDING PING" << std::endl;
 				int playerIndex = PlayerIndexByPORT(messagePending[i].port);
 				if (playerIndex != -1) {
 					players[playerIndex].pingTries += 1;
-					std::cout << "PLAYER " << players[playerIndex].playerID << " PING TRIES " << players[playerIndex].pingTries << std::endl;
+					///std::cout << "PLAYER " << players[playerIndex].playerID << " PING TRIES " << players[playerIndex].pingTries << std::endl;
 					if (players[playerIndex].pingTries >= MAXPINTTRIES) {
-						std::cout << "DISCONNECTED PLAYER " << players[playerIndex].playerID << std::endl;
+						///std::cout << "DISCONNECTED PLAYER " << players[playerIndex].playerID << std::endl;
 						//CREATE DIS PACKET: DIS_IDPLAYER_IDMESSAGE
 						sf::Packet disconnectionPacket;	//PAQUETE PARA EL RESTO DE JUGADORES QUE NO DESCONECTAS
 						disconnectionPacket << Commands::DIS;
@@ -334,43 +346,22 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 			//FOUND MY MESSAGE TO DELETE
 			int playerIndex = 0;
 			if (iteratorToDelete->maxTime == PINGMAXTIME_MS) {
-				std::cout << "ACK PING" << std::endl;
+				///std::cout << "ACK PING" << std::endl;
 				pingMessage = true;
 				playerIndex = PlayerIndexByPORT(iteratorToDelete->port);
 				if (playerIndex != -1) {
 					players[playerIndex].pingTries = 0;
 				}
 			}
+			playerIndex = PlayerIndexByPORT(iteratorToDelete->port);
 			if (iteratorToDelete->commandType == Commands::CLR && !players[playerIndex].colorConfirmed) {	//VERIFICACION PARA SABER SI EL ACK ES PARA UN CLR Y PODER SABER DESPUÉS SI YA SE HAN CONFIRMADO TODOS.
+				///std::cout << "COLOR CONFIRMED" << std::endl;
 				playersColorConfirmed++;
 				players[playerIndex].colorConfirmed = true;
 			}
-			found = true;
-		}
-		else { indexToDelete++; iteratorToDelete++; }
-	}
-
-	if (found && !pingMessage) { messagePending.erase(iteratorToDelete); }
-}
-
-/*
-
-void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
-	int indexToDelete = 0;
-	bool found = false;
-	bool pingMessage = false;
-	std::vector<PendingMessage>::iterator iteratorToDelete = messagePending.begin();
-
-	while (!found && (indexToDelete < messagePending.size())) {	//if(iteratorToDelete != messagePending.end()) ALTERNATIVA PARA NO USAR EL INDEXTODELETE
-		if (iteratorToDelete->id == _ID) {
-			//FOUND MY MESSAGE TO DELETE
-			if (iteratorToDelete->maxTime == PINGMAXTIME_MS) {
-				std::cout << "ACK PING" << std::endl;
-				pingMessage = true;
-				int playerIndex = PlayerIndexByPORT(iteratorToDelete->port);
-				if (playerIndex != -1) {
-					players[playerIndex].pingTries = 0;
-				}
+			else if (iteratorToDelete->commandType == Commands::DED && !players[playerIndex].deadConfirmed) {
+				playersDeadConfirmed++;
+				players[playerIndex].deadConfirmed = true;
 			}
 			found = true;
 		}
@@ -379,8 +370,6 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 
 	if (found && !pingMessage) { messagePending.erase(iteratorToDelete); }
 }
-
-*/
 
 void InitCells() {
 	//INIT CELLS:
@@ -517,9 +506,11 @@ void InitCells() {
 
 Cell RandomCell() {
 	Cell tempCell;
-	int randomCellNum = (rand() % 5) + 0; //random lel
-
+	int randomCellNum = (rand() % 25) + 0; //random lel
+	//std::cout << "rand number " << randomCellNum << std::endl;
 	tempCell = cells[randomCellNum];
+	//std::cout << "COLOR RAND CELL SELECTED: (" << int(cells[randomCellNum].color.r) << ", " << int(cells[randomCellNum].color.g) << ", " << int(cells[randomCellNum].color.b) << ") --------------------" << std::endl;
+	//std::cout << "POS RAND CELL SELECTED: (" << int(cells[randomCellNum].pos.x) << ", " << int(cells[randomCellNum].pos.y) << ") --------------------" << std::endl;
 	return tempCell;
 }
 
@@ -551,17 +542,17 @@ int main()
 			if (movementDeltaTime > TIME_PER_MOVEMENT && movementsPending.size() > 0) {
 				for (int i = 0; i < movementsPending.size(); i++) {
 					PendingMovement tempMov = movementsPending[i]; //pillar el primero de la lista
-					if (tempMov.pos.x >= LEFT_CELL && tempMov.pos.x < RIGHT_CELL) {
+					if (tempMov.pos.x >= LEFT_CELL && tempMov.pos.x < RIGHT_CELL && tempMov.pos.y >= LEFT_CELL && tempMov.pos.y < RIGHT_CELL) {
 						sf::Packet okMovePack;
 						sf::Packet penMovePack;
-						std::cout << "MOVE ACCEPTED" << std::endl;
+						//std::cout << "MOVE ACCEPTED" << std::endl;
 						//ACK_MOVE
 						okMovePack << Commands::OKM;
 						penMovePack << Commands::PEM;
 						int indexPlayerOkMove;
 						indexPlayerOkMove = PlayerIndexByPORT(tempMov.player.port);
 						if (indexPlayerOkMove != -1) {
-							std::cout << "MOVE PLAYER FOUND" << std::endl;
+							//std::cout << "MOVE PLAYER FOUND" << std::endl;
 							players[indexPlayerOkMove].pos = tempMov.pos;
 							//packet al que se mueve
 							okMovePack << tempMov.player.playerID;
@@ -584,7 +575,7 @@ int main()
 						}
 					}
 					else {	//MOVIMIENTO DENEGADO => MANDAR UN NOK
-						std::cout << "envio denied" << std::endl;
+						//std::cout << "envio denied" << std::endl;
 						sf::Packet nokPack;
 						nokPack << Commands::NOK;
 						nokPack << tempMov.player.playerID;
@@ -661,6 +652,7 @@ int main()
 								//añadir usuario a lista
 								tempPlayer.dead = false;
 								tempPlayer.colorConfirmed = false;
+								tempPlayer.deadConfirmed = false;
 								players.push_back(tempPlayer);
 							}
 
@@ -671,26 +663,31 @@ int main()
 							//añadir usuario a lista
 							tempPlayer.dead = false;
 							tempPlayer.colorConfirmed = false;
+							tempPlayer.deadConfirmed = false;
 							players.push_back(tempPlayer);
 						}
 						//añadido usuario
 						std::cout << "Current player size: " << players.size() << std::endl;
+						if (players.size() == MAX_PLAYERS && actualState == State::WAITINGFORPLAYERS) {	//START GAME
+							///std::cout << "Game Start============================================================================================================" << std::endl;
+							SetGetMode(SET, State::CHOSINGCOLOR);
+						}
 						//enviar paquete
 						SendCon(tempPlayer, players, idMessage);
 						break;
 
 					case ACK:
 						pck >> idMessage;
-						std::cout << "ID MESSAGE" << idMessage << std::endl;
+						//std::cout << "ID MESSAGE" << idMessage << std::endl;
 						MessageConfirmed(idMessage);
 						break;
 					case MOV:
-						std::cout << "RECEIVED MOVE" << std::endl;
+						///std::cout << "RECEIVED MOVE" << std::endl;
 						pck >> movPos.x;
 						pck >> movPos.y;
-						std::cout << movPos.x << std::endl;
+						//std::cout << movPos.x << std::endl;
 						pck >> idMov;
-						std::cout << "IDMOV" << idMov << std::endl;
+						//std::cout << "IDMOV" << idMov << std::endl;
 						pck >> idMessage;
 						int tempPlayerid = players[PlayerIndexByPORT(portRem)].playerID;
 						//comprobar que no sea uno ya enviado
@@ -700,7 +697,7 @@ int main()
 							while (it < movementsPending.size() && !found) {
 								if (movementsPending[it].idMessage == idMessage && movementsPending[it].player.playerID == tempPlayerid) {
 									found = true;
-									std::cout << "copied" << std::endl;
+									//std::cout << "copied" << std::endl;
 								}
 								it++;
 							}
@@ -715,7 +712,7 @@ int main()
 					}
 				}
 				else {
-					std::cout << "Se ha ignorado el mensaje con comando " << command << " (Roll: " << randomNumber << ")" << std::endl;
+					//std::cout << "Se ha ignorado el mensaje con comando " << command << " (Roll: " << randomNumber << ")" << std::endl;
 				}
 				/*
 				int pos;
@@ -743,6 +740,7 @@ int main()
 						actualCellPicked = RandomCell();
 						sf::Packet colorPacket;
 						colorPacket << Commands::CLR;
+						//std::cout << "COLOR SELECTED: (" << actualCellPicked.color.r << ", " << actualCellPicked.color.g << ", " << actualCellPicked.color.b << ") --------------------" << std::endl;
 						colorPacket << actualCellPicked.color.r;
 						colorPacket << actualCellPicked.color.g;
 						colorPacket << actualCellPicked.color.b;
@@ -759,22 +757,28 @@ int main()
 						}
 					}
 					else if (actualState == State::WAITINGFORTURNEND) {	//WAIT FOR MOVEMENT
+						//std::cout << "TIEM: " << int(time.asSeconds()) << std::endl;
 						if (int(time.asSeconds()) >= TIME_PER_TURN) {
-							sf::Packet stopPacket;
-							stopPacket << Commands::STP;
-							for each (Player p in players) {
-								AddMessage(Commands::STP, stopPacket, p.ip, p.port);
-							}
-
+							//sf::Packet stopPacket;
+							//stopPacket << Commands::STP;
+							//for each (Player p in players) {
+							//	AddMessage(Commands::STP, stopPacket, p.ip, p.port);
+							//}
+							std::cout << "CAMBIAR A COMPUTING MOVEMENT" << std::endl;
 							SetGetMode(SET, State::COMPUTINGMOVEMENT);
 						}
 					}
-					else if (actualState == State::COMPUTINGMOVEMENT) {	//COMPUTE MOVEMENT WHEN TIME'S UP
+					else if (actualState == State::COMPUTINGMOVEMENT) {	//COMPUTE MOVEMENT WHEN TIME'S UP	!!!!!!!!!!! --> Posible problema: Si se está computando aún movimiento de algún player cuando esto se ha acabado entonces la pos del player no es la que debería ser. Podemos esperar a que la lista de movimientos esté vacía.
 						int playersDead = 0;
 						sf::Packet deadPlayersPacket;
 						deadPlayersPacket << Commands::DED;
 						for (int asd = 0; asd < players.size(); asd++) {	//MIRO SI HAN MUERTO Y SUMO 1 AL NÚMERO DE PLAYERS MUERTOS
-							if (players[asd].pos != actualCellPicked.pos) {	//PLAYER IS DEAD
+							int playerX = 0;
+							int playerY = 0;
+							playerX = std::floor(players[asd].pos.x / 2);	
+							playerY = std::floor(players[asd].pos.y / 2);
+							sf::Vector2i playerPosActual = sf::Vector2i(playerX, playerY);	//IF player is on cell(5, 2) : (2, 1)
+							if (playerPosActual != actualCellPicked.pos && !players[asd].dead) {	//PLAYER IS DEAD
 								players[asd].dead = true;
 								playersDead++;
 							}
@@ -782,7 +786,7 @@ int main()
 
 						if (playersDead > 0) {	//SI EL NÚMERO DE PLAYERS MUERTOS ES > 0
 							deadPlayersPacket << playersDead;
-							for (int asd = 0; asd < players.size(); asd++) {	//BUCLE PARA PILLAR EL ID DE LOS MUERTOS Y METERLOS EN EL PACKET
+							for (int asd = 0; asd < players.size(); asd++) {	//BUCLE PARA PILLAR EL ID DE LOS MUERTOS Y METERLOS EN EL PACKET	
 								if (players[asd].dead) {	//PLAYER IS DEAD
 									deadPlayersPacket << players[asd].playerID;
 								}
@@ -790,7 +794,15 @@ int main()
 							for (int asd = 0; asd < players.size(); asd++) {	//BUCLE PARA MANDAR EL PACKET
 								AddMessage(Commands::DED, deadPlayersPacket, players[asd].ip, players[asd].port);
 							}
-							
+							//NO ES ÓPTIMO PERO SON FORS PEQUEÑOS ASÍ QUE NO PASA NADA. min 2 loops necesarios, el segundo de los tres podría ser evitado usando un array para guardar los IDs (ints). 
+							//Sin embargo no sabemos cuántos jugadores estamos mirando así que necesitaríamos hacer un array dinámico y no vale la pena para algo tan pequeño como esto.
+							SetGetMode(SET, State::WAITINGDEDCONFIRMATION);
+						}
+						else { SetGetMode(SET, State::CHOSINGCOLOR); }	//If none died we send nothing so we start a new turn
+					}
+					else if (actualState == State::WAITINGDEDCONFIRMATION) {
+						if (playersDeadConfirmed == players.size()) {
+							SetGetMode(SET, State::CHOSINGCOLOR);
 						}
 					}
 
@@ -800,9 +812,7 @@ int main()
 			clock.restart();
 		}
 		if (firstReset) { clockDeltaTime.restart(); firstReset = false; }
-		//std::cout << "SEND MESSAGES" << std::endl;
 		SendMessages(clockDeltaTime.getElapsedTime().asSeconds());
-		//std::cout << "FINISH SEND MESSAGES" << std::endl;
 		clockDeltaTime.restart();
 
 	} while (true);

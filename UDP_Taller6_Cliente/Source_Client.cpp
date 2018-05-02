@@ -4,6 +4,9 @@
 #include <iostream>
 #include <random>
 
+#define SET 0
+#define GET 1
+
 #define IP_SERVER "localhost"
 #define PORT_SERVER 50000
 
@@ -11,8 +14,6 @@
 #define TIME_PER_MOVEMENT 1.0f
 
 enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR };
-
-enum State {WAITING, PLAYING, WAITINGFORCOLOR};
 
 int pos;
 sf::UdpSocket sock;
@@ -23,11 +24,15 @@ sf::Vector2i desiredPos = sf::Vector2i(0, 0);
 sf::Vector2i previousDesiredPos = sf::Vector2i(0, 0);
 int timeAnimation = 100;
 
+sf::Color backgroundColor = sf::Color(125, 125, 125, 255);
+
 struct Cell
 {
 	sf::Vector2i pos;
 	sf::Color color;
 };
+
+Cell actualCellToGo;
 
 struct Player
 {
@@ -180,7 +185,6 @@ void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desiredCellPos, int timeAnim) {
 	sf::Vector2i distanceToTravel = desiredCellPos - curCellPos;
 	distanceToTravel *= 40; //cell to pixel
-	std::cout << distanceToTravel.x << ", " << distanceToTravel.y << std::endl;
 	bool changeCellPos = false;
 	if (distanceToTravel.x != 0) { //cambiar posicion si eso
 		distanceToTravel.x /= timeAnim;
@@ -363,27 +367,27 @@ void DibujaSFML()
 				window.close();
 				break;
 			case sf::Event::KeyPressed:
-				if (event.key.code == sf::Keyboard::Left)
+				if (event.key.code == sf::Keyboard::Left && !players[0].dead)
 				{
 					desiredPos.x -= 1;
 					std::cout << "MOVE LEFT" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
 				}
-				else if (event.key.code == sf::Keyboard::Right)
+				else if (event.key.code == sf::Keyboard::Right && !players[0].dead)
 				{
 					desiredPos.x += 1;
 					std::cout << "MOVE RIGHT" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 				}
-				else if (event.key.code == sf::Keyboard::Up)
+				else if (event.key.code == sf::Keyboard::Up && !players[0].dead)
 				{
 					desiredPos.y -= 1;
 					std::cout << "MOVE UP" << std::endl;
 					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
 				}
-				else if (event.key.code == sf::Keyboard::Down)
+				else if (event.key.code == sf::Keyboard::Down && !players[0].dead)
 				{
 					desiredPos.y += 1;
 					std::cout << "MOVE DOWN" << std::endl;
@@ -466,6 +470,9 @@ void DibujaSFML()
 						}
 						pck >> idMessage;
 						MessageConfirmed(idMessage);
+
+						backgroundColor = players[0].pjColor;
+
 						break;
 					}
 					case NEW:
@@ -591,6 +598,41 @@ void DibujaSFML()
 						sock.send(pckAck, IP_SERVER, PORT_SERVER);
 						break;
 					}
+					case CLR: {
+						sf::Color recievedColor;
+						pck >> recievedColor.r;
+						pck >> recievedColor.g;
+						pck >> recievedColor.b;
+						recievedColor.a = 255;
+						actualCellToGo.color = recievedColor;
+						std::cout << "COLOR RECIEVED: (" << unsigned(recievedColor.r) << ", " << unsigned(recievedColor.g) << ", " << unsigned(recievedColor.b) << ")" << std::endl;
+						pck >> idMessage;
+						sf::Packet pckAck;
+						pckAck << Commands::ACK;
+						pckAck << idMessage;
+						sock.send(pckAck, IP_SERVER, PORT_SERVER);
+					}
+					case DED: {
+						int numPlayersDead = 0;
+						pck >> numPlayersDead;
+						if (numPlayersDead > 0) {
+							for (int asd = 0; asd < numPlayersDead; asd++) {
+								int playerIDDeaded = -1;
+								pck >> playerIDDeaded;
+								std::vector<Player>::iterator tempItPlayerToKill = PlayerItIndexByID(playerIDDeaded);
+								if (tempItPlayerToKill != players.end() && !tempItPlayerToKill->dead) {
+									tempItPlayerToKill->dead = true;
+									std::cout << "Player " << tempItPlayerToKill->playerID << " didn't make it in time.." << std::endl;
+								}
+							}
+						}
+
+						pck >> idMessage;
+						sf::Packet pckAck;
+						pckAck << Commands::ACK;
+						pckAck << idMessage;
+						sock.send(pckAck, IP_SERVER, PORT_SERVER);
+					}
 				} //esto esta bien tabulado
 			}
 			else {
@@ -618,9 +660,22 @@ void DibujaSFML()
 		}
 		window.clear();
 
+
+		sf::RectangleShape bg(sf::Vector2f(800, 600));
+		bg.setFillColor(backgroundColor);
+		bg.setPosition(sf::Vector2f(0, 0));
+		window.draw(bg);
+
+		sf::RectangleShape rectToSearch(sf::Vector2f(80, 80));
+		rectToSearch.setFillColor(actualCellToGo.color);
+		rectToSearch.setOutlineThickness(2.0f);
+		rectToSearch.setOutlineColor(sf::Color::Black);
+		rectToSearch.setPosition(sf::Vector2f(200 + actualCellToGo.pos.x * 80, actualCellToGo.pos.y * 80));
+		window.draw(rectToSearch);
+
 		sf::RectangleShape rectBlanco(sf::Vector2f(1, 600));
-		rectBlanco.setFillColor(sf::Color::White);
-		rectBlanco.setPosition(sf::Vector2f(200, 0));
+		rectBlanco.setFillColor(sf::Color::Black);
+		rectBlanco.setPosition(sf::Vector2f(199, 0));
 		window.draw(rectBlanco);
 		rectBlanco.setPosition(sf::Vector2f(600, 0));
 		window.draw(rectBlanco);
@@ -628,9 +683,9 @@ void DibujaSFML()
 		//DRAW CELLS
 		for each (Cell c in cells)
 		{
-			sf::RectangleShape rectAvatar(sf::Vector2f(40, 40));
+			sf::RectangleShape rectAvatar(sf::Vector2f(80, 80));
 			rectAvatar.setFillColor(c.color);
-			rectAvatar.setPosition(sf::Vector2f(200 + c.pos.x * 40, c.pos.y * 40));
+			rectAvatar.setPosition(sf::Vector2f(200 + c.pos.x * 80, c.pos.y * 80));
 			window.draw(rectAvatar);
 
 		}
@@ -640,6 +695,8 @@ void DibujaSFML()
 			if (!p.dead) {
 				sf::RectangleShape rectAvatar(sf::Vector2f(40, 40));
 				rectAvatar.setFillColor(p.pjColor);
+				rectAvatar.setOutlineThickness(2.0f);
+				rectAvatar.setOutlineColor(sf::Color::Black);
 				rectAvatar.setPosition(sf::Vector2f(200 + p.pixelPos.x, p.pixelPos.y));
 				window.draw(rectAvatar);
 			}
@@ -655,6 +712,8 @@ void DibujaSFML()
 int main(){
 	pos = 200;
 	InitCells();
+	actualCellToGo.pos = sf::Vector2i(2, 6);
+	actualCellToGo.color = backgroundColor;
 	sock.setBlocking(false);
 	//sistema HEY
 	sf::Packet pckHey;

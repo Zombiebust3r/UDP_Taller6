@@ -1,6 +1,8 @@
 ﻿  Source_Server.cpp
-d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(528): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
-d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(616): warning C4101: 'idMessage': variable local sin referencia
+d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(519): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
+d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(778): warning C4244: '=': conversión de 'double' a 'int'; posible pérdida de datos
+d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(779): warning C4244: '=': conversión de 'double' a 'int'; posible pérdida de datos
+d:\documentos\github\upd\udp_taller6\upd_taller6\source_server.cpp(607): warning C4101: 'idMessage': variable local sin referencia
 d:\documentos\github\upd\udp_taller6\upd_taller6\chronometer.h(143): warning C4715: 'sftools::Chronometer::getElapsedTime': no todas las rutas de acceso de control devuelven un valor
   UPD_Taller6.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UPD_Taller6.exe
   UPD_Taller6.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Debug\UPD_Taller6.pdb (Partial PDB)

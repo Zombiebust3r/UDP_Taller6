@@ -24,7 +24,7 @@
 #define TIME_PER_TURN 10
 #define MAX_PLAYERS 3
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR, WIN};
 //CLR_R_G_B						INFORMA DEL COLOR A BUSCAR
 //DED_#PLAYERSDEAD_ID_ID_ID...	INFORMA DE LOS JUGADORES MUERTOS
 //STP							MARCA EL FINAL DEL TURNO Y PARA EL MOVIMIENTO.
@@ -39,7 +39,8 @@ bool firstReset = true;
 sftools::Chronometer chrono;
 int playersColorConfirmed = 0; //Compare this to players.size();
 int playersDeadConfirmed = 0;  //Comper this to players.size();
-
+int playersWinConfirmed = 0;
+bool gameRunning = true;
 struct Cell
 {
 	sf::Vector2i pos;
@@ -59,6 +60,7 @@ struct Player
 	bool dead;
 	bool colorConfirmed;
 	bool deadConfirmed;
+	bool winConfirmed;
 };
 
 struct PendingMessage {
@@ -261,6 +263,30 @@ void AddMessage(Commands messageType, sf::Packet _pack, sf::IpAddress _ip, unsig
 	actualID++;
 }
 
+
+void CheckPlayersRemaining() {
+	std::vector<Player> playersAlive;
+	for (int i = 0; i < players.size(); i++) {
+		if (!players[i].dead) playersAlive.push_back(players[i]);
+	}
+	if (playersAlive.size() == 1) {
+		sf::Packet winPacket;
+		winPacket << Commands::WIN;
+		winPacket << playersAlive[0].playerID;
+		for (int i = 0; i < players.size(); i++) {	//BUCLE PARA ENVIAR EL WIN A TODOS LOS JUGADORES
+			AddMessage(Commands::WIN, winPacket, players[i].ip, players[i].port);
+		}
+	}
+	else if (playersAlive.size() == 0) {
+		sf::Packet winPacket;
+		winPacket << Commands::WIN;
+		winPacket << -1;
+		for (int i = 0; i < players.size(); i++) {	//BUCLE PARA ENVIAR EL WIN A TODOS LOS JUGADORES
+			AddMessage(Commands::WIN, winPacket, players[i].ip, players[i].port);
+		}
+	}
+}
+
 void DeletePlayer(int playerIndex) {
 	///std::cout << "DISCONNECTED PLAYER " << players[playerIndex].playerID << std::endl;
 	//CREATE DIS PACKET: DIS_IDPLAYER_IDMESSAGE
@@ -278,6 +304,7 @@ void DeletePlayer(int playerIndex) {
 	for (int toAll = 0; toAll < players.size(); toAll++) {
 		AddMessage(Commands::DIS, disconnectionPacket, players[toAll].ip, players[toAll].port);
 	}
+	CheckPlayersRemaining();
 }
 
 void SendMessages(float deltaTime) {	//NO SE LLAMA PARA LOS PINGs PQ SE TIENEN QUE MANDAR SIEMPRE Y CUANDO EL JUGADOR AL QUE SE ENVÍA NO ESTÁ DESCONECTADO
@@ -365,6 +392,13 @@ void MessageConfirmed(int _ID) {	//SOLO PARA EL ACK
 			else if (iteratorToDelete->commandType == Commands::DED && !players[playerIndex].deadConfirmed) {
 				playersDeadConfirmed++;
 				players[playerIndex].deadConfirmed = true;
+			}
+			else if (iteratorToDelete->commandType == Commands::WIN && !players[playerIndex].winConfirmed) {
+				playersWinConfirmed++;
+				players[playerIndex].winConfirmed = true;
+				if (playersWinConfirmed >= players.size()) {
+					gameRunning = false;
+				}
 			}
 			found = true;
 		}
@@ -656,6 +690,7 @@ int main()
 								tempPlayer.dead = false;
 								tempPlayer.colorConfirmed = false;
 								tempPlayer.deadConfirmed = false;
+								tempPlayer.winConfirmed = false;
 								players.push_back(tempPlayer);
 							}
 
@@ -667,6 +702,7 @@ int main()
 							tempPlayer.dead = false;
 							tempPlayer.colorConfirmed = false;
 							tempPlayer.deadConfirmed = false;
+							tempPlayer.winConfirmed = false;
 							players.push_back(tempPlayer);
 						}
 						//añadido usuario
@@ -685,9 +721,7 @@ int main()
 						MessageConfirmed(idMessage);
 						break;
 					case DIS:
-
 						DeletePlayer(PlayerIndexByPORT(portRem));
-
 						break;
 					case MOV:
 						///std::cout << "RECEIVED MOVE" << std::endl;
@@ -802,6 +836,7 @@ int main()
 							for (int asd = 0; asd < players.size(); asd++) {	//BUCLE PARA MANDAR EL PACKET
 								AddMessage(Commands::DED, deadPlayersPacket, players[asd].ip, players[asd].port);
 							}
+							CheckPlayersRemaining();
 							//NO ES ÓPTIMO PERO SON FORS PEQUEÑOS ASÍ QUE NO PASA NADA. min 2 loops necesarios, el segundo de los tres podría ser evitado usando un array para guardar los IDs (ints). 
 							//Sin embargo no sabemos cuántos jugadores estamos mirando así que necesitaríamos hacer un array dinámico y no vale la pena para algo tan pequeño como esto.
 							SetGetMode(SET, State::WAITINGDEDCONFIRMATION);
@@ -823,7 +858,7 @@ int main()
 		SendMessages(clockDeltaTime.getElapsedTime().asSeconds());
 		clockDeltaTime.restart();
 
-	} while (true);
+	} while (gameRunning);
 	sock.unbind();
 	return 0;
 }

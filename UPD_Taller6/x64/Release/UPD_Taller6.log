@@ -1,9 +1,12 @@
 ﻿  Source_Server.cpp
-Source_Server.cpp(285): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
-Source_Server.cpp(362): warning C4101: 'idMessage': variable local sin referencia
+Source_Server.cpp(556): warning C4244: 'argumento': conversión de 'time_t' a 'unsigned int'; posible pérdida de datos
+Source_Server.cpp(820): warning C4244: '=': conversión de 'double' a 'int'; posible pérdida de datos
+Source_Server.cpp(821): warning C4244: '=': conversión de 'double' a 'int'; posible pérdida de datos
+Source_Server.cpp(644): warning C4101: 'idMessage': variable local sin referencia
   Generando código
-  14 of 345 functions ( 4.1%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    12 functions had inline decision re-evaluated but remain unchanged
+d:\documentos\github\upd\udp_taller6\upd_taller6\chronometer.h(143): warning C4715: 'sftools::Chronometer::getElapsedTime': no todas las rutas de acceso de control devuelven un valor
+  411 of 418 functions (98.3%) were compiled, the rest were copied from previous compilation.
+    84 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
   Generación de código finalizada
-  UPD_Taller6.vcxproj -> E:\Yosm\Documents\uni\3r\3r2sem\redes\bloc2\UDP_Taller6\x64\Release\UPD_Taller6.exe
+  UPD_Taller6.vcxproj -> D:\Documentos\GitHub\UPD\UDP_Taller6\x64\Release\UPD_Taller6.exe

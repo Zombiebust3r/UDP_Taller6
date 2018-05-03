@@ -13,7 +13,7 @@
 #define PERCENT_PACKETLOSS 0.01
 #define TIME_PER_MOVEMENT 1.0f
 
-enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR };
+enum Commands { HEY, CON, NEW, ACK, MOV, PIN, DIS, EXE, OKM, PEM, NOK, DED, CLR, WIN};
 
 int pos;
 sf::UdpSocket sock;
@@ -25,6 +25,7 @@ sf::Vector2i previousDesiredPos = sf::Vector2i(0, 0);
 int timeAnimation = 100;
 
 sf::Color backgroundColor = sf::Color(125, 125, 125, 255);
+bool blockMovement = false;
 
 struct Cell
 {
@@ -371,31 +372,33 @@ void DibujaSFML()
 			}
 				break;
 			case sf::Event::KeyPressed:
-				if (event.key.code == sf::Keyboard::Left && !players[0].dead)
-				{
-					desiredPos.x -= 1;
-					std::cout << "MOVE LEFT" << std::endl;
-					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
+				if (!blockMovement) {
+					if (event.key.code == sf::Keyboard::Left && !players[0].dead)
+					{
+						desiredPos.x -= 1;
+						std::cout << "MOVE LEFT" << std::endl;
+						//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
-				}
-				else if (event.key.code == sf::Keyboard::Right && !players[0].dead)
-				{
-					desiredPos.x += 1;
-					std::cout << "MOVE RIGHT" << std::endl;
-					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
-				}
-				else if (event.key.code == sf::Keyboard::Up && !players[0].dead)
-				{
-					desiredPos.y -= 1;
-					std::cout << "MOVE UP" << std::endl;
-					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
+					}
+					else if (event.key.code == sf::Keyboard::Right && !players[0].dead)
+					{
+						desiredPos.x += 1;
+						std::cout << "MOVE RIGHT" << std::endl;
+						//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
+					}
+					else if (event.key.code == sf::Keyboard::Up && !players[0].dead)
+					{
+						desiredPos.y -= 1;
+						std::cout << "MOVE UP" << std::endl;
+						//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
 
-				}
-				else if (event.key.code == sf::Keyboard::Down && !players[0].dead)
-				{
-					desiredPos.y += 1;
-					std::cout << "MOVE DOWN" << std::endl;
-					//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
+					}
+					else if (event.key.code == sf::Keyboard::Down && !players[0].dead)
+					{
+						desiredPos.y += 1;
+						std::cout << "MOVE DOWN" << std::endl;
+						//AÑADIR MENSAJE A LISTA DE PENDIENTES: ID un int que aumenta a cada mensaje añadido | msg es el packete | time iniciado a 0 (milisegundos) MOV
+					}
 				}
 				break;
 				
@@ -637,6 +640,21 @@ void DibujaSFML()
 						pckAck << idMessage;
 						sock.send(pckAck, IP_SERVER, PORT_SERVER);
 					}
+							  break;
+					case WIN:
+						int playerWon;
+						pck >> playerWon;
+						if (playerWon == players[0].playerID) std::cout << "YOU WON THE GAME!!!!!!!!!!!" << std::endl;
+						else std::cout << "You lost the game :(" << std::endl;
+						
+						blockMovement = true;
+
+						pck >> idMessage;
+						sf::Packet pckAck;
+						pckAck << Commands::ACK;
+						pckAck << idMessage;
+						sock.send(pckAck, IP_SERVER, PORT_SERVER);
+
 				} //esto esta bien tabulado
 			}
 			else {

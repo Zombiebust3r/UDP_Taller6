@@ -182,12 +182,12 @@ void MovementDenied(int _ID, int _IDPlayer) {	// SOLO PARA EL CON
 	}	//BORRA TODO LO SIGUIENTE AL DENEGADO Y REINICIA DESIRED POS CON EL ÚLTIMO NO CONFIRMADO AÚN
 }
 
-void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desiredCellPos, int timeAnim) {
+void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desiredCellPos, int timeIteration) {
 	sf::Vector2i distanceToTravel = desiredCellPos - curCellPos;
 	distanceToTravel *= 40; //cell to pixel
 	bool changeCellPos = false;
 	if (distanceToTravel.x != 0) { //cambiar posicion si eso
-		distanceToTravel.x /= timeAnim;
+		distanceToTravel.x /= timeIteration;
 		players[playerIndex].pixelPos.x += distanceToTravel.x;
 
 		if (distanceToTravel.x < 0 && players[playerIndex].pixelPos.x < desiredCellPos.x * 40) {
@@ -198,7 +198,7 @@ void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desir
 		}
 	}
 	else if (distanceToTravel.y != 0) {
-		distanceToTravel.y /= timeAnim;
+		distanceToTravel.y /= timeIteration;
 		players[playerIndex].pixelPos.y += distanceToTravel.y;
 
 		if (distanceToTravel.y < 0 && players[playerIndex].pixelPos.y < desiredCellPos.y * 40) {
@@ -213,7 +213,6 @@ void PredictionFunc(int playerIndex, sf::Vector2i curCellPos, sf::Vector2i desir
 		players[playerIndex].pixelPos = desiredCellPos * 40; //reajustar
 	}
 		
-	
 }
 
 void InitCells() {
@@ -658,7 +657,7 @@ void DibujaSFML()
 			int curTime = chronoAnimationTime.getElapsedTime().asMilliseconds();
 			if (curTime > timeAnimation / 10) { //10 es el numero de movimientos antes de llegar al destino
 				for (int i = 0; i < players.size(); i++) {
-					PredictionFunc(i, players[i].cellPos, players[i].desiredCellPos, timeAnimation / 10);
+					PredictionFunc(i, players[i].cellPos, players[i].desiredCellPos, 10);
 				}
 				chronoAnimationTime.restart();
 			}
